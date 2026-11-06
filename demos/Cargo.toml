@@ -1,0 +1,18 @@
+[package]
+name = "flow-demos"
+version = "0.1.10"
+edition = "2021"
+description = "Demos of what Flow draws: 3D scenes, pictures, teletext, its sounds, the glass's wash and a model from a file, over its liquid, which they set moving"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/arcanii/Flow-SDK"
+publish = false
+
+[[bin]]
+name = "flow-demo"
+path = "src/main.rs"
+
+[dependencies]
+# What the terminal can do, the scenes, the stage they're shown on, the
+# pictures and the liquid's effects; and crossterm (re-exported) for raw
+# mode, keys, the mouse and resizes, on every OS.
+flow-sdk = { path = ".." }

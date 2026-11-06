@@ -1,0 +1,38 @@
+[package]
+name = "flow-sdk-c"
+version = "0.1.0"
+edition = "2021"
+# flow-sdk's, and `<[T]>::as_chunks` here too.
+rust-version = "1.88"
+description = "Flow's SDK for C, and for the languages that call C (Python's ctypes): pictures, 3D models, meshes, scenes, screens of cells, the liquid's effects and sound, and audio of the program's own"
+# The SDK's, whose last section is on C and Python; the header,
+# include/flow_sdk.h, documents each function.
+readme = "../README.md"
+repository = "https://github.com/arcanii/Flow-SDK"
+license = "MIT OR Apache-2.0"
+keywords = ["terminal", "kitty-graphics", "ffi", "c", "python"]
+categories = ["command-line-interface", "graphics", "multimedia::audio"]
+# Not until flow-sdk is published: see the SDK's README.md.
+publish = false
+
+[lib]
+name = "flow_sdk_c"
+# A shared library for C programs and Python's ctypes, a static one to build
+# into a program, and an rlib for the crate's own tests.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+# The program's own audio (flow-sdk's `audio`: songs, instruments, the
+# mixer), on unless built with --no-default-features. Its functions are
+# exported either way, so one header serves both builds: without it they
+# refuse (NULL, -1) and flow_audio_built() says why.
+default = ["audio"]
+audio = ["flow-sdk/audio"]
+
+[dependencies]
+# The version is what a published flow-sdk-c would take from crates.io.
+flow-sdk = { path = "..", version = "0.1.0" }
+
+# docs.rs builds it with audio, as cargo builds it by default.
+[package.metadata.docs.rs]
+all-features = true

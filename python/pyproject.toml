@@ -1,0 +1,35 @@
+# Flow's SDK for Python: pure Python over Flow's C library (flow-sdk-c,
+# beside it in c/) through ctypes, with no extension to compile. The
+# library is built with Cargo, not by this file: see README.md. Copied
+# into flow_sdk/ before a wheel is built, it goes in the wheel, which is then
+# marked for that platform alone (setup.py); without it the wheel is pure.
+[build-system]
+requires = ["setuptools>=70.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# PyPI's flow-sdk is someone else's; it still imports as flow_sdk.
+name = "flow-terminal-sdk"
+version = "0.1.0"
+description = "What Flow adds over a plain console, for Python programs that run in it: pictures, 3D models, meshes, scenes, screens of cells, the liquid's effects and sound, and music of the program's own"
+requires-python = ">=3.8"
+license = {text = "MIT OR Apache-2.0"}
+dependencies = []
+keywords = ["terminal", "kitty", "graphics", "tui", "3d"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Terminals",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+
+[tool.setuptools]
+packages = ["flow_sdk"]
+
+# The C library, where it was copied in for a platform's wheel.
+[tool.setuptools.package-data]
+flow_sdk = ["libflow_sdk_c.dylib", "libflow_sdk_c.so", "flow_sdk_c.dll"]

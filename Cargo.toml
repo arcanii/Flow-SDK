@@ -1,0 +1,66 @@
+# Flow's SDK: this crate (flow-sdk), the same as a C library (c/, the
+# flow-sdk-c crate) with a Python package over it (python/), and the demos
+# built on it (demos/, flow-demo). They use none of Flow's own crates.
+[workspace]
+members = [".", "c", "demos"]
+
+[package]
+name = "flow-sdk"
+version = "0.1.0"
+edition = "2021"
+# `<[T]>::as_chunks` (picture.rs), which came in 1.88.
+rust-version = "1.88"
+description = "What Flow adds over a plain console, for programs that run in it: pictures, 3D models, screens of cells, the liquid's effects and sound"
+readme = "README.md"
+repository = "https://github.com/arcanii/Flow-SDK"
+# Either, at the user's choice (LICENSE-MIT, LICENSE-APACHE beside this).
+license = "MIT OR Apache-2.0"
+keywords = ["terminal", "kitty-graphics", "tui", "3d", "escape-sequences"]
+categories = ["command-line-interface", "graphics", "multimedia::audio", "game-development"]
+# The Python package beside it goes with the C library, not this crate; the
+# C library (c/) is a crate of its own, which cargo leaves out by itself.
+exclude = ["python/"]
+# Not until it's published: see README.md.
+publish = false
+
+[features]
+default = []
+# Sound of the program's own, made in code and played on the machine
+# (through cpal on macOS and Windows, through ALSA's library on Linux).
+audio = ["dep:cpal"]
+
+[dependencies]
+# Raw mode, keys, the mouse and resizes, on every OS; re-exported, so a
+# program reads its keys with the same version.
+crossterm = "0.29"
+# Pictures and models go to the terminal base64-encoded.
+base64 = "0.22"
+# Raw pixels go zlib-compressed.
+miniz_oxide = "0.8"
+
+# Asking the terminal what it can do, before crossterm reads the keys.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# The program's own sound, out through CoreAudio or WASAPI. Linux loads
+# ALSA's library as the program runs instead (alsa.rs, with libc), since
+# cpal would need ALSA's headers to build.
+[target.'cfg(any(target_os = "macos", windows))'.dependencies]
+cpal = { version = "0.18.2", optional = true }
+
+[dev-dependencies]
+# Reading a scene's glTF back, as Flow does, materials and all.
+gltf = { version = "1.4", default-features = false, features = ["import", "utils", "extensions", "KHR_materials_emissive_strength", "KHR_materials_unlit"] }
+
+[[example]]
+name = "tune"
+required-features = ["audio"]
+
+# docs.rs documents the program's own sound too.
+[package.metadata.docs.rs]
+all-features = true
+
+# As Flow builds its own: flow-demo goes out with Flow's releases.
+[profile.release]
+lto = "thin"
+codegen-units = 4

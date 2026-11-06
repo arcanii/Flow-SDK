@@ -452,12 +452,16 @@ Linux, a thread of the output's own), and runs in tests without an
 output. Keep it for music and the like: Flow's own sounds,
 above, follow the user's settings for sound in Flow.
 
-A `Clip` is sound the program has made itself, sample by sample, at a
-rate of its own (speech it synthesizes, say): `Audio::play_clip` plays it
-once alongside the rest, the mix taking it to the output's rate. Its
-samples are shared (`Arc<[f32]>`), so keep a clip to play it again; Flow
-Invaders' radio voice is played this way. It isn't in the C library or
-the Python package yet.
+A `Clip` is sound the program has made itself or decoded, sample by
+sample, at a rate of its own: `Audio::play_clip` plays it alongside the
+rest, the mix taking it to the output's rate. It's one channel, panned,
+or two (`Clip::stereo`, interleaved); played once, or round and round
+seamlessly (`looped`); coming up from silence if asked (`fade_in`); and
+known by a `tag`, so `Audio::fade_clips` can fade out the music, say,
+and leave speech playing. Its samples are shared (`Arc<[f32]>`), so keep
+a clip to play it again. Flow Invaders' radio voice and its music are
+played this way. Clips aren't in the C library or the Python package
+yet.
 
 For music under a game, a `Song` is several lines played together and
 looped, each on an `Instrument` made in code: a plucked lute (Karplus and

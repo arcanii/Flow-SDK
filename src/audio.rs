@@ -299,27 +299,49 @@ impl Song {
     }
 }
 
-/// Sound a program has made itself, sample by sample, played once at its
-/// own rate ([`Mixer::play_clip`]): speech it synthesizes, say. Its samples
-/// are shared, so handing it over copies nothing; keep one to play again,
-/// and the output's callback frees nothing when it's done with it.
+/// Sound a program has made itself, sample by sample, or decoded (speech
+/// it synthesizes, music it carries), played at its own rate
+/// ([`Mixer::play_clip`]): once, or round and round until it's faded out
+/// ([`Clip::looped`], [`Mixer::fade_clips`]); in one channel, panned, or
+/// two ([`Clip::stereo`]). Its samples are shared, so handing it over
+/// copies nothing; keep one to play again, and the output's callback frees
+/// nothing when it's done with it.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Clip {
-    /// Its samples, -1 to 1.
+    /// Its samples, -1 to 1: two channels' interleaved, left first, for a
+    /// clip in stereo.
     pub samples: Arc<[f32]>,
-    /// Samples a second: the mix plays it at its own rate, whatever the
-    /// output's.
+    /// Frames a second (a sample a channel each): the mix plays it at its
+    /// own rate, whatever the output's.
     pub rate: f32,
+    /// 1, or 2 in stereo.
+    pub channels: u8,
     /// 0 to 1.
     pub volume: f32,
-    /// -1 (left) to 1 (right).
+    /// -1 (left) to 1 (right): where a clip of one channel sits, and how a
+    /// stereo one leans.
     pub pan: f32,
+    /// Played round and round, until it's faded out.
+    pub looped: bool,
+    /// Seconds it comes up over, from silence.
+    pub fade_in: f32,
+    /// What [`Mixer::fade_clips`] knows it by (0 for none): music, say,
+    /// faded apart from speech.
+    pub tag: u32,
 }
 
 impl Clip {
-    /// `samples` at `rate` a second, at full volume, in the middle.
+    /// `samples` of one channel at `rate` a second, at full volume, in the
+    /// middle, played once.
     pub fn new(samples: impl Into<Arc<[f32]>>, rate: f32) -> Self {
-        Self { samples: samples.into(), rate: rate.max(1.0), volume: 1.0, pan: 0.0 }
+        Self { samples: samples.into(), rate: rate.max(1.0), channels: 1, volume: 1.0, pan: 0.0, looped: false, fade_in: 0.0, tag: 0 }
+    }
+
+    /// `samples` of two channels, interleaved, left first, at `rate`
+    /// frames a second.
+    pub fn stereo(samples: impl Into<Arc<[f32]>>, rate: f32) -> Self {
+        Self { channels: 2, ..Self::new(samples, rate) }
     }
 
     /// At `volume`, 0 to 1.
@@ -332,34 +354,82 @@ impl Clip {
         Self { pan: pan.clamp(-1.0, 1.0), ..self }
     }
 
-    /// How long it plays, in seconds.
+    /// Played round and round, seamlessly, until it's faded out.
+    pub fn looped(self) -> Self {
+        Self { looped: true, ..self }
+    }
+
+    /// Coming up over `secs` seconds, from silence.
+    pub fn fade_in(self, secs: f32) -> Self {
+        Self { fade_in: secs.max(0.0), ..self }
+    }
+
+    /// Known by `tag` to [`Mixer::fade_clips`].
+    pub fn tag(self, tag: u32) -> Self {
+        Self { tag, ..self }
+    }
+
+    /// Its frames: samples a channel.
+    fn frames(&self) -> usize {
+        self.samples.len() / self.channels.max(1) as usize
+    }
+
+    /// How long it plays once round, in seconds.
     pub fn length(&self) -> f32 {
-        self.samples.len() as f32 / self.rate
+        self.frames() as f32 / self.rate
     }
 }
 
-/// A clip playing, and how far into its samples it is.
+/// A clip playing: how far into its frames it is, how loud it's come up,
+/// and how fast it's fading out, if it is.
 #[derive(Debug, Clone)]
 struct Clipping {
     clip: Clip,
     at: f64,
+    level: f32,
+    fading: Option<f32>,
 }
 
 impl Clipping {
-    /// Its next sample, `step` of its own samples on, between the two it
-    /// falls between.
-    fn next(&mut self, step: f64) -> f32 {
-        let s = &self.clip.samples;
+    fn new(clip: Clip) -> Self {
+        let level = if clip.fade_in > 0.0 { 0.0 } else { 1.0 };
+        Self { clip, at: 0.0, level, fading: None }
+    }
+
+    /// Its next left and right, `step` of its own frames on (`dt` seconds),
+    /// each between the two frames it falls between, round to the start
+    /// for a loop.
+    fn next(&mut self, step: f64, dt: f32) -> [f32; 2] {
+        let frames = self.clip.frames();
+        let channels = self.clip.channels.max(1) as usize;
         let i = self.at as usize;
         let k = (self.at - i as f64) as f32;
-        let a = s.get(i).copied().unwrap_or(0.0);
-        let b = s.get(i + 1).copied().unwrap_or(0.0);
+        let j = if self.clip.looped && i + 1 >= frames { 0 } else { i + 1 };
+        let s = &self.clip.samples;
+        let sample = |frame: usize, c: usize| s.get(frame * channels + c.min(channels - 1)).copied().unwrap_or(0.0);
+        let [l, r] = [0, 1].map(|c| sample(i, c) + (sample(j, c) - sample(i, c)) * k);
         self.at += step;
-        (a + (b - a) * k) * self.clip.volume
+        if self.clip.looped && frames > 0 && self.at >= frames as f64 {
+            self.at -= frames as f64;
+        }
+        self.level = match self.fading {
+            Some(rate) => (self.level - rate * dt).max(0.0),
+            None if self.clip.fade_in > 0.0 => (self.level + dt / self.clip.fade_in).min(1.0),
+            None => 1.0,
+        };
+        let pan = self.clip.pan;
+        let gain = self.clip.volume * self.level;
+        if channels == 1 {
+            // An equal-power pan.
+            let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4;
+            [l * gain * angle.cos(), l * gain * angle.sin()]
+        } else {
+            [l * gain * (1.0 - pan).min(1.0), r * gain * (1.0 + pan).min(1.0)]
+        }
     }
 
     fn done(&self) -> bool {
-        self.at >= self.clip.samples.len() as f64
+        (!self.clip.looped && self.at >= self.clip.frames() as f64) || (self.fading.is_some() && self.level <= 0.0)
     }
 }
 
@@ -486,16 +556,28 @@ impl Mixer {
         self.tunes.push(Playing { tune, next: 0, wait: 0.0 });
     }
 
-    /// Plays `clip` once, alongside whatever else is playing; the oldest
-    /// clip gives way when there are too many.
+    /// Plays `clip` (once, or looped), alongside whatever else is
+    /// playing; the oldest clip gives way when there are too many.
     pub fn play_clip(&mut self, clip: Clip) {
-        if clip.samples.is_empty() {
+        if clip.frames() == 0 {
             return;
         }
         if self.clips.len() >= MAX_CLIPS {
             self.clips.remove(0);
         }
-        self.clips.push(Clipping { clip, at: 0.0 });
+        self.clips.push(Clipping::new(clip));
+    }
+
+    /// The clips tagged `tag` fade out over `secs` seconds and stop (at
+    /// once for 0), loops too; the rest play on.
+    pub fn fade_clips(&mut self, tag: u32, secs: f32) {
+        for c in self.clips.iter_mut().filter(|c| c.clip.tag == tag) {
+            c.fading = Some(if secs > 0.0 { c.level / secs } else { f32::INFINITY });
+            if secs <= 0.0 {
+                c.level = 0.0;
+            }
+        }
+        self.clips.retain(|c| !c.done());
     }
 
     /// Everything falls silent at once, songs and clips too.
@@ -535,10 +617,9 @@ impl Mixer {
             }
             self.voices.retain(|v| !v.done());
             for c in &mut self.clips {
-                let s = c.next(c.clip.rate as f64 / rate as f64);
-                let angle = (c.clip.pan + 1.0) * std::f32::consts::FRAC_PI_4;
-                lr[0] += s * angle.cos();
-                lr[1] += s * angle.sin();
+                let [l, r] = c.next(c.clip.rate as f64 / rate as f64, dt);
+                lr[0] += l;
+                lr[1] += r;
             }
             self.clips.retain(|c| !c.done());
             for band in [&mut self.song, &mut self.leaving].into_iter().flatten() {
@@ -819,6 +900,7 @@ enum Cmd {
     Tone(Tone),
     Tune(Box<Tune>),
     Clip(Box<Clip>),
+    FadeClips(u32, f32),
     Stop,
     Volume(f32),
     /// A song to play, made into a [`Band`] at the output's rate on the
@@ -850,9 +932,17 @@ impl Audio {
         self.send(Cmd::Tune(Box::new(tune)));
     }
 
-    /// Plays `clip` once ([`Mixer::play_clip`]).
+    /// Plays `clip` ([`Mixer::play_clip`]).
     pub fn play_clip(&mut self, clip: Clip) {
         self.send(Cmd::Clip(Box::new(clip)));
+    }
+
+    /// The clips tagged `tag` fade out over `secs` seconds and stop
+    /// ([`Mixer::fade_clips`]).
+    pub fn fade_clips(&mut self, tag: u32, secs: f32) {
+        if self.tx.is_some() {
+            self.send(Cmd::FadeClips(tag, secs));
+        }
     }
 
     /// Everything falls silent.
@@ -916,7 +1006,7 @@ fn run(rx: Receiver<Cmd>) {
                     out.send(Cmd::Volume(v));
                 }
             }
-            Ok(cmd @ (Cmd::Stop | Cmd::StopSong)) => {
+            Ok(cmd @ (Cmd::Stop | Cmd::StopSong | Cmd::FadeClips(..))) => {
                 if let Some(out) = &output {
                     out.send(cmd);
                 }
@@ -971,6 +1061,7 @@ fn apply(mixer: &mut Mixer, cmd: Cmd) {
         // Its samples are shared with the program, which keeps them: the
         // box alone is dropped here.
         Cmd::Clip(clip) => mixer.play_clip(*clip),
+        Cmd::FadeClips(tag, secs) => mixer.fade_clips(tag, secs),
         Cmd::Stop => mixer.stop(),
         Cmd::Volume(v) => mixer.set_volume(v),
         // Made on the output's thread; the one it replaces fading out is
@@ -1217,6 +1308,40 @@ mod tests {
         assert!(!mixer.busy());
         mixer.play_clip(Clip::new(Vec::new(), 16_000.0));
         assert!(!mixer.busy(), "an empty clip plays nothing");
+    }
+
+    #[test]
+    fn a_stereo_clip_keeps_its_sides_and_a_loop_plays_round_until_faded() {
+        let mut mixer = Mixer::new(RATE);
+        // A tenth of a second, the left loud and the right quiet, looped.
+        let frames: Vec<f32> = (0..1600).flat_map(|_| [0.5f32, 0.1]).collect();
+        let music = Clip::stereo(frames, 16_000.0).looped().tag(7);
+        assert!((music.length() - 0.1).abs() < 1e-6, "a frame a pair");
+        mixer.play_clip(music);
+        let out = render(&mut mixer, 0.35);
+        let frame = |i: usize| [out[i * 2], out[i * 2 + 1]];
+        for t in [0.05, 0.15, 0.32] {
+            let [l, r] = frame((RATE * t) as usize);
+            assert!((l - 0.5f32.tanh()).abs() < 1e-3 && (r - 0.1f32.tanh()).abs() < 1e-3, "round and round, each side its own, at {t}: {l} {r}");
+        }
+        // A voice beside it, untagged, plays on as the music fades.
+        mixer.play_clip(Clip::new(vec![0.3f32; 16_000], 16_000.0).pan(1.0));
+        mixer.fade_clips(7, 0.1);
+        let out = render(&mut mixer, 0.2);
+        let [l, r] = [out[(RATE * 0.15) as usize * 2], out[(RATE * 0.15) as usize * 2 + 1]];
+        assert!(l.abs() < 1e-3 && r > 0.2, "the music faded, the voice on: {l} {r}");
+        assert!(mixer.busy());
+        mixer.fade_clips(0, 0.0);
+        assert!(!mixer.busy(), "faded at once");
+    }
+
+    #[test]
+    fn a_clip_may_come_up_from_silence() {
+        let mut mixer = Mixer::new(RATE);
+        mixer.play_clip(Clip::new(vec![0.5f32; 16_000], 16_000.0).fade_in(0.5));
+        let out = render(&mut mixer, 0.8);
+        let at = |t: f32| out[(RATE * t) as usize * 2];
+        assert!(at(0.05) < at(0.25) && at(0.25) < at(0.45) && (at(0.7) - at(0.6)).abs() < 1e-4, "{} {} {} {}", at(0.05), at(0.25), at(0.45), at(0.7));
     }
 
     #[test]

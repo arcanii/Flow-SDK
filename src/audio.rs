@@ -13,9 +13,13 @@
 //! with a soft limit, rendered sample by sample in the output's callback
 //! without waiting on anything; a song's voices are made before it's handed
 //! over. Tests run it without an output.
+//!
+//! A [`Clip`] is sound a program has made itself, sample by sample (speech
+//! it synthesizes, say), played once at its own rate alongside the rest.
 
 use std::f32::consts::TAU;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Whether anything plays on this system: on Linux, as long as ALSA's
@@ -27,6 +31,9 @@ pub const AVAILABLE: bool = cfg!(any(unix, windows));
 const MAX_VOICES: usize = 32;
 /// Tunes playing at once, at most.
 const MAX_TUNES: usize = 8;
+/// Clips playing at once, at most; a new one past them takes the place of
+/// the oldest.
+const MAX_CLIPS: usize = 8;
 /// Silence after which the output is closed.
 const IDLE: Duration = Duration::from_secs(3);
 /// How long after the output wouldn't open it's tried again, rather than for
@@ -292,6 +299,70 @@ impl Song {
     }
 }
 
+/// Sound a program has made itself, sample by sample, played once at its
+/// own rate ([`Mixer::play_clip`]): speech it synthesizes, say. Its samples
+/// are shared, so handing it over copies nothing; keep one to play again,
+/// and the output's callback frees nothing when it's done with it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clip {
+    /// Its samples, -1 to 1.
+    pub samples: Arc<[f32]>,
+    /// Samples a second: the mix plays it at its own rate, whatever the
+    /// output's.
+    pub rate: f32,
+    /// 0 to 1.
+    pub volume: f32,
+    /// -1 (left) to 1 (right).
+    pub pan: f32,
+}
+
+impl Clip {
+    /// `samples` at `rate` a second, at full volume, in the middle.
+    pub fn new(samples: impl Into<Arc<[f32]>>, rate: f32) -> Self {
+        Self { samples: samples.into(), rate: rate.max(1.0), volume: 1.0, pan: 0.0 }
+    }
+
+    /// At `volume`, 0 to 1.
+    pub fn volume(self, volume: f32) -> Self {
+        Self { volume: volume.clamp(0.0, 1.0), ..self }
+    }
+
+    /// Panned, -1 (left) to 1 (right).
+    pub fn pan(self, pan: f32) -> Self {
+        Self { pan: pan.clamp(-1.0, 1.0), ..self }
+    }
+
+    /// How long it plays, in seconds.
+    pub fn length(&self) -> f32 {
+        self.samples.len() as f32 / self.rate
+    }
+}
+
+/// A clip playing, and how far into its samples it is.
+#[derive(Debug, Clone)]
+struct Clipping {
+    clip: Clip,
+    at: f64,
+}
+
+impl Clipping {
+    /// Its next sample, `step` of its own samples on, between the two it
+    /// falls between.
+    fn next(&mut self, step: f64) -> f32 {
+        let s = &self.clip.samples;
+        let i = self.at as usize;
+        let k = (self.at - i as f64) as f32;
+        let a = s.get(i).copied().unwrap_or(0.0);
+        let b = s.get(i + 1).copied().unwrap_or(0.0);
+        self.at += step;
+        (a + (b - a) * k) * self.clip.volume
+    }
+
+    fn done(&self) -> bool {
+        self.at >= self.clip.samples.len() as f64
+    }
+}
+
 /// One tone sounding.
 #[derive(Debug, Clone)]
 struct Voice {
@@ -358,6 +429,7 @@ pub struct Mixer {
     rate: f32,
     voices: Vec<Voice>,
     tunes: Vec<Playing>,
+    clips: Vec<Clipping>,
     volume: f32,
     /// The song playing, and the one fading out under it.
     song: Option<Box<Band>>,
@@ -367,7 +439,7 @@ pub struct Mixer {
 impl Mixer {
     /// A silent mix at `rate` samples a second.
     pub fn new(rate: f32) -> Self {
-        Self { rate, voices: Vec::with_capacity(MAX_VOICES), tunes: Vec::with_capacity(MAX_TUNES), volume: 1.0, song: None, leaving: None }
+        Self { rate, voices: Vec::with_capacity(MAX_VOICES), tunes: Vec::with_capacity(MAX_TUNES), clips: Vec::with_capacity(MAX_CLIPS), volume: 1.0, song: None, leaving: None }
     }
 
     /// Plays `song`, looped, fading it in over a second as the song before
@@ -414,10 +486,23 @@ impl Mixer {
         self.tunes.push(Playing { tune, next: 0, wait: 0.0 });
     }
 
-    /// Everything falls silent at once, songs too.
+    /// Plays `clip` once, alongside whatever else is playing; the oldest
+    /// clip gives way when there are too many.
+    pub fn play_clip(&mut self, clip: Clip) {
+        if clip.samples.is_empty() {
+            return;
+        }
+        if self.clips.len() >= MAX_CLIPS {
+            self.clips.remove(0);
+        }
+        self.clips.push(Clipping { clip, at: 0.0 });
+    }
+
+    /// Everything falls silent at once, songs and clips too.
     pub fn stop(&mut self) {
         self.voices.clear();
         self.tunes.clear();
+        self.clips.clear();
         self.song = None;
         self.leaving = None;
     }
@@ -430,7 +515,7 @@ impl Mixer {
     /// Something is still sounding or still to come: a song, until it's
     /// faded out.
     pub fn busy(&self) -> bool {
-        !self.voices.is_empty() || !self.tunes.is_empty() || self.song.is_some() || self.leaving.is_some()
+        !self.voices.is_empty() || !self.tunes.is_empty() || !self.clips.is_empty() || self.song.is_some() || self.leaving.is_some()
     }
 
     /// Fills `out`, `channels` samples a frame (left and right first; any
@@ -449,6 +534,13 @@ impl Mixer {
                 lr[1] += s * angle.sin();
             }
             self.voices.retain(|v| !v.done());
+            for c in &mut self.clips {
+                let s = c.next(c.clip.rate as f64 / rate as f64);
+                let angle = (c.clip.pan + 1.0) * std::f32::consts::FRAC_PI_4;
+                lr[0] += s * angle.cos();
+                lr[1] += s * angle.sin();
+            }
+            self.clips.retain(|c| !c.done());
             for band in [&mut self.song, &mut self.leaving].into_iter().flatten() {
                 let [l, r] = band.next(dt, rate);
                 lr[0] += l;
@@ -726,6 +818,7 @@ impl Band {
 enum Cmd {
     Tone(Tone),
     Tune(Box<Tune>),
+    Clip(Box<Clip>),
     Stop,
     Volume(f32),
     /// A song to play, made into a [`Band`] at the output's rate on the
@@ -755,6 +848,11 @@ impl Audio {
     /// Plays `tune` ([`Mixer::play_tune`]).
     pub fn play_tune(&mut self, tune: Tune) {
         self.send(Cmd::Tune(Box::new(tune)));
+    }
+
+    /// Plays `clip` once ([`Mixer::play_clip`]).
+    pub fn play_clip(&mut self, clip: Clip) {
+        self.send(Cmd::Clip(Box::new(clip)));
     }
 
     /// Everything falls silent.
@@ -870,6 +968,9 @@ fn apply(mixer: &mut Mixer, cmd: Cmd) {
         Cmd::Tone(tone) => mixer.play(tone),
         // Its steps go with it; dropped here once it's done, a tune is small.
         Cmd::Tune(tune) => mixer.play_tune(*tune),
+        // Its samples are shared with the program, which keeps them: the
+        // box alone is dropped here.
+        Cmd::Clip(clip) => mixer.play_clip(*clip),
         Cmd::Stop => mixer.stop(),
         Cmd::Volume(v) => mixer.set_volume(v),
         // Made on the output's thread; the one it replaces fading out is
@@ -1092,6 +1193,30 @@ mod tests {
 
     fn rms(s: &[f32]) -> f32 {
         (s.iter().map(|x| x * x).sum::<f32>() / s.len().max(1) as f32).sqrt()
+    }
+
+    #[test]
+    fn a_clip_plays_once_at_its_own_rate_and_then_falls_silent() {
+        let mut mixer = Mixer::new(RATE);
+        // A tenth of a second at 16 kHz, a steady level, panned left.
+        let clip = Clip::new(vec![0.5f32; 1600], 16_000.0).volume(0.8).pan(-1.0);
+        assert!((clip.length() - 0.1).abs() < 1e-6);
+        mixer.play_clip(clip.clone());
+        assert!(mixer.busy());
+        let out = render(&mut mixer, 0.15);
+        let frame = |i: usize| [out[i * 2], out[i * 2 + 1]];
+        let middle = frame((RATE * 0.05) as usize);
+        assert!((middle[0] - (0.4f32).tanh()).abs() < 1e-3 && middle[1].abs() < 1e-3, "on the left, at its level: {middle:?}");
+        let after = frame((RATE * 0.11) as usize);
+        assert_eq!(after, [0.0, 0.0], "a tenth of a second at the output's rate too");
+        assert!(!mixer.busy());
+        // Shared, not copied: the program's copy plays again.
+        mixer.play_clip(clip);
+        assert!(rms(&render(&mut mixer, 0.05)) > 0.1);
+        mixer.stop();
+        assert!(!mixer.busy());
+        mixer.play_clip(Clip::new(Vec::new(), 16_000.0));
+        assert!(!mixer.busy(), "an empty clip plays nothing");
     }
 
     #[test]

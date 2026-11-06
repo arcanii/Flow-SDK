@@ -6,7 +6,7 @@ members = [".", "c", "demos"]
 
 [package]
 name = "flow-sdk"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # `<[T]>::as_chunks` (picture.rs), which came in 1.88.
 rust-version = "1.88"

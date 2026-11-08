@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import unittest
@@ -26,7 +27,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PACKAGE_ROOT))
 
 import flow_sdk as flow  # noqa: E402
-from flow_sdk import _native, audio, fx, model, picture, scene, settings  # noqa: E402
+from flow_sdk import _native, audio, fx, model, picture, scene, settings, theme  # noqa: E402
 
 HEADER = PACKAGE_ROOT.parent / "c" / "include" / "flow_sdk.h"
 
@@ -574,6 +575,132 @@ class Pictures(unittest.TestCase):
         self.assertEqual(picture.bare_row(0x010203, 2), "\x1b[38;2;1;2;3m" + cell * 2 + "\x1b[39m")
         self.assertTrue(picture.placeholders(5, (3, 4), 1, 2).startswith("\x1b[5;4H"))
         self.assertTrue(0x100000 <= picture.first_id(42) <= 0xFFFFFF)
+
+
+#: Flow's own machines as Flow writes their package, the Rust SDK's fixture.
+FLOWS_OWN = PACKAGE_ROOT.parent / "tests" / "fixtures" / "flow-core-themes.json"
+
+#: The first bytes of a TrueType font and of a PNG, as far as the checks look.
+FONT = b"\x00\x01\x00\x00\x00\x0a\x00\x80\x00\x03\x00\x20"
+PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR"
+
+
+class Themes(unittest.TestCase):
+    """Theme packages for Flow, written as the Rust SDK writes them and
+    checked as Flow checks them."""
+
+    def setUp(self):
+        library_or_skip(self)
+        self.scratch = tempfile.TemporaryDirectory()
+        self.dir = Path(self.scratch.name)
+
+    def tearDown(self):
+        self.scratch.cleanup()
+
+    def green(self):
+        return (
+            theme.Theme("green")
+            .name("Green screen")
+            .name_in("ja", "グリーンディスプレイ")
+            .fonts(["VT323", "Glass TTY VT220", "IBM 3270", "3270 Nerd Font Mono"])
+            .text(0x41FF6E)
+            .cursor(0x41FF6E)
+            .background(0x020B04)
+            .ansi([0x0A2A12, 0x2FAF4F, 0x41FF6E, 0x7CFF9A, 0x2A8C44, 0x36C95A, 0x5CFF86, 0x9CFFB4, 0x1E5A2C, 0x4FD873, 0x6BFF8F, 0xACFFC2, 0x3AA35A, 0x5FE07F, 0x86FFA6, 0xD0FFDC])
+            .phosphor(0x41FF6E)
+            .blink()
+            .cursor_speed(1.5)
+            .crt("phosphor")
+            .start(["FLOW-11 MINICOMPUTER", "{memory} OF CORE", "", "BOOTING TIME-SHARING SYSTEM ...", ""])
+            .baud(1200)
+            .prompt("$ ")
+            .sounds("terminal")
+            .screen(80, 24)
+        )
+
+    def test_a_theme_built_is_written_as_flow_writes_its_own(self):
+        if not FLOWS_OWN.is_file():
+            self.skipTest("the Rust SDK's fixture isn't beside the package here")
+        flows = next(t for t in json.loads(FLOWS_OWN.read_text("utf-8"))["themes"] if t["id"] == "green")
+        with theme.Package("flow-core-themes", "0.1.0", [self.green()]) as package:
+            written = package.json()
+            self.assertTrue(written.endswith("\n"))
+            file = json.loads(written)
+            self.assertEqual((file["format"], file["package"], file["version"]), (1, "flow-core-themes", "0.1.0"))
+            self.assertEqual(file["themes"], [flows])
+            self.assertEqual(package.file_name, "flow-core-themes-0.1.0.tar.gz")
+
+    def test_a_theme_with_only_its_id_wears_flows_own(self):
+        with theme.Package("mine", "1.0", [theme.Theme("plain")]) as package:
+            plain = json.loads(package.json())["themes"][0]
+        self.assertEqual((plain["text"], plain["cursor"], plain["background"], plain["sounds"], plain["prompt"], plain["screen"]), ("#E4E9F2", "#8FE3FF", "#080C16", "quiet", None, None))
+        self.assertNotIn("keys", plain)
+
+    def test_what_flow_hasnt_is_refused_at_once(self):
+        mine = theme.Theme("mine")
+        for name in ("cursor_shape", "crt", "sounds"):
+            with self.assertRaisesRegex(ValueError, "Flow has no"):
+                getattr(mine, name)("heart")
+        with self.assertRaises(ValueError):
+            mine.cursor_speed(9)
+        with self.assertRaises(ValueError):
+            mine.ansi([0] * 15)
+        with self.assertRaisesRegex(theme.Refused, "“fx.liquid” isn't one of the look's settings a theme may bring"):
+            mine.key("fx", "liquid", False)
+        with self.assertRaisesRegex(theme.Refused, "“fx.sun” can't be"):
+            mine.key("fx", "sun", "bright")
+        mine.key("fx", "style", "water").key("colors", "ansi", None)
+        mine.check()
+
+    def test_what_only_the_whole_can_tell_is_refused_saying_why(self):
+        for made, why in [
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("Mine")]), "isn't an id a theme may have"),
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("flow")]), "isn't an id a theme may have"),
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("wide").screen(5000, 24)]), "no screen is 5000 × 24"),
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("ja").name_in("ja-JP", "x")]), "isn't a language's code"),
+            (lambda: theme.Package("mine", "1.0"), "mine holds no themes"),
+            (lambda: theme.Package("Mine", "1.0", [theme.Theme("fine")]), "isn't a package's name"),
+            (lambda: theme.Package("mine", ".1", [theme.Theme("fine")]), "isn't a version"),
+        ]:
+            with made() as package:
+                with self.assertRaisesRegex(theme.Refused, why):
+                    package.check()
+                with self.assertRaisesRegex(theme.Refused, why):
+                    package.write(self.dir / "nothing")
+                self.assertFalse((self.dir / "nothing").exists(), "nothing written")
+        with self.assertRaises(OSError):
+            theme.Theme("gone").font_file(self.dir / "gone.ttf").check()
+        (self.dir / "picture.ttf").write_bytes(PNG)
+        with self.assertRaisesRegex(theme.Refused, "isn't a TrueType or OpenType font"):
+            theme.Theme("png").font_file(self.dir / "picture.ttf").check()
+
+    def test_a_packed_package_holds_its_json_and_its_files_owned_by_no_one(self):
+        (self.dir / "Mine.ttf").write_bytes(FONT)
+        (self.dir / "mine.png").write_bytes(PNG)
+        mine = theme.Theme("mine").name("Mine").font_file(self.dir / "Mine.ttf").fonts(["Mine Mono"]).logo(self.dir / "mine.png")
+        with theme.Package("mine", "1.0", [mine]) as package:
+            written = package.write(self.dir / "written")
+            self.assertEqual((written / "fonts" / "Mine.ttf").read_bytes(), FONT)
+            self.assertEqual(json.loads((written / "themes.json").read_text("utf-8"))["themes"][0]["logo"], "logos/mine.png")
+            tarball = package.pack(self.dir / "out" / package.file_name)
+            json_text = package.json()
+        with tarfile.open(tarball, "r:gz") as packed:
+            members = packed.getmembers()
+            self.assertEqual(sorted(m.name for m in members), [".", "./fonts", "./fonts/Mine.ttf", "./logos", "./logos/mine.png", "./themes.json"])
+            for member in members:
+                self.assertEqual((member.uid, member.gid, member.uname, member.gname), (0, 0, "", ""), member.name)
+            self.assertEqual(packed.extractfile("./themes.json").read().decode("utf-8"), json_text)
+
+    def test_the_example_packs_its_themes_and_says_why_one_isnt(self):
+        tarball = self.dir / "examples.tar.gz"
+        ran = subprocess.run([sys.executable, "-I", "-B", str(PACKAGE_ROOT / "examples" / "theme.py"), str(tarball)], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        said = ran.stdout.decode("utf-8", "replace")
+        self.assertEqual(ran.returncode, 0, said + ran.stderr.decode("utf-8", "replace"))
+        self.assertIn("Not packed: “VT100” isn't an id a theme may have", said)
+        with tarfile.open(tarball, "r:gz") as packed:
+            file = json.loads(packed.extractfile("./themes.json").read())
+        self.assertEqual([t["id"] for t in file["themes"]], ["vt52", "aquarium"])
+        self.assertEqual(file["themes"][1]["keys"], {"fx": {"style": "water", "sun": 0.8, "water_view": "below"}})
 
 
 class Settings(unittest.TestCase):

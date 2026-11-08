@@ -18,7 +18,7 @@ use std::ffi::{c_char, c_int};
 #[cfg(feature = "audio")]
 use flow_sdk::audio::{self, Audio, Instrument, Line, Mixer, Song, Tone, Tune, Wave};
 
-use crate::{given, guard, owned, text};
+use crate::{given, guard, tell, text, untold};
 
 /// Runs `body` under [`guard`] where the library was built with audio, and
 /// gives `fallback` where it wasn't, without compiling `body` at all.
@@ -120,22 +120,6 @@ fn positive(value: f32) -> Option<f32> {
 /// `act` refused.
 unsafe fn on<T>(handle: *mut T, act: impl FnOnce(&mut T) -> Option<()>) -> c_int {
     handle.as_mut().and_then(act).map_or(-1, |()| 0)
-}
-
-/// Clears `*error`, if `error` points anywhere, so the caller always has
-/// NULL or a reason to free.
-unsafe fn untold(error: *mut *mut c_char) {
-    if let Some(error) = error.as_mut() {
-        *error = std::ptr::null_mut();
-    }
-}
-
-/// Puts `why` in `*error`, if `error` points anywhere, for the caller to
-/// free.
-unsafe fn tell(error: *mut *mut c_char, why: &str) {
-    if let Some(error) = error.as_mut() {
-        *error = owned(why.to_string());
-    }
 }
 
 /// Frees a handle made by `Box::into_raw`; NULL is let be.

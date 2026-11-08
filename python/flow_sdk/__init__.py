@@ -7,8 +7,9 @@ cells sent as their difference from the last, with pictures among the
 letters (:class:`Screen`), the liquid's effects and Flow's sounds
 (:class:`Effect`, ``flow_sdk.fx``), found out first by asking the terminal
 (:func:`detect`) and falling back quietly where it can't show them; Flow's
-settings, seen and changed (``flow_sdk.settings``); and audio of the
-program's own, songs for a small band played on the machine
+settings, seen and changed (``flow_sdk.settings``); theme packages for
+Flow, written and packed for ``flowapp install`` (``flow_sdk.theme``); and
+audio of the program's own, songs for a small band played on the machine
 (``flow_sdk.audio``).
 
 It's pure Python over Flow's C library (flow-sdk-c) through ctypes; see
@@ -24,7 +25,7 @@ back as strings, to write with :func:`write` or send with
             terminal.send_effects(flow.Effect.ripple((10, 5)).sound("chime").escape())
 """
 
-from . import audio, cells, fx, model, picture, scene, settings, stage
+from . import audio, cells, fx, model, picture, scene, settings, stage, theme
 from ._native import ABI
 from .fx import Budget, Effect
 from .mesh import Material, Mesh, rgb
@@ -85,5 +86,6 @@ __all__ = [
     "settings",
     "size",
     "stage",
+    "theme",
     "write",
 ]

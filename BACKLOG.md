@@ -38,7 +38,8 @@ to do:
 kitty pictures (and Flow's pipe on Windows), Ratty models, meshes and
 scenes, a screen of cells sent as its difference, OSC 7731 effects and a
 queue of them, the glass's tint and sounds, DECPS, audio behind a feature,
-and input. The demos and both games are built on it, and it has a C library
+theme packages for Flow (`theme`, behind a feature, from 0.1.3), and
+input. The demos and both games are built on it, and it has a C library
 (`c/`) and a Python package over that (`python/`), which have all of
 it but the queue of effects (a few lines over a program's own clock). It's
 licensed MIT OR Apache-2.0. Still to do:
@@ -50,6 +51,9 @@ licensed MIT OR Apache-2.0. Still to do:
   example among them, and the Python package's) pass, with and without
   audio, and a song played from Python through the C library was heard
   through ALSA, but none of it has been tried in a live Flow window.
+  Theme packages are packed with Windows' own `tar.exe` and GNU tar's
+  flags there, both untried: so far only macOS's bsdtar has packed one
+  (and `flowapp install` taken it).
 - **Published**, once its interfaces settle (`publish = false` now): this
   repository holds it; still to come are the owners on crates.io
   (`flow-sdk`, `flow-sdk-c`) and PyPI (`flow-terminal-sdk`), taking out

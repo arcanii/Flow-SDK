@@ -6,7 +6,7 @@ members = [".", "c", "demos"]
 
 [package]
 name = "flow-sdk"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 # `<[T]>::as_chunks` (picture.rs), which came in 1.88.
 rust-version = "1.88"
@@ -28,6 +28,9 @@ default = []
 # Sound of the program's own, made in code and played on the machine
 # (through cpal on macOS and Windows, through ALSA's library on Linux).
 audio = ["dep:cpal"]
+# Theme packages for Flow (theme.rs): themes.json written with serde, and
+# packed with the system's tar.
+theme = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 # Raw mode, keys, the mouse and resizes, on every OS; re-exported, so a
@@ -37,6 +40,9 @@ crossterm = "0.29"
 base64 = "0.22"
 # Raw pixels go zlib-compressed.
 miniz_oxide = "0.8"
+# themes.json, as Flow's own types read it, behind the `theme` feature.
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 
 # Asking the terminal what it can do, before crossterm reads the keys.
 [target.'cfg(unix)'.dependencies]
@@ -55,6 +61,10 @@ gltf = { version = "1.4", default-features = false, features = ["import", "utils
 [[example]]
 name = "tune"
 required-features = ["audio"]
+
+[[example]]
+name = "theme"
+required-features = ["theme"]
 
 # docs.rs documents the program's own sound too.
 [package.metadata.docs.rs]

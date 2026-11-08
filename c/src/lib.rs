@@ -1,15 +1,15 @@
 //! Flow's SDK for C, and for any language that calls C (Python's ctypes,
 //! say): the questions, pictures, models, meshes, scenes and their vector
-//! maths, stages, screens of cells, effects and Flow's settings of
-//! `flow-sdk`, and with the `audio` feature (on by default) its songs and
-//! mixer, as `extern "C"` functions named `flow_…`, declared by hand in
-//! `include/flow_sdk.h`. The SDK's functions mostly make escape strings,
-//! and so do these: each comes back as a string or a buffer that the
-//! caller owns and hands back to [`flow_free`]. The builders are opaque
-//! handles (`FlowMesh`, `FlowEffect`, `FlowScene`, `FlowCamera`,
+//! maths, stages, screens of cells, effects, Flow's settings and its theme
+//! packages of `flow-sdk`, and with the `audio` feature (on by default)
+//! its songs and mixer, as `extern "C"` functions named `flow_…`, declared
+//! by hand in `include/flow_sdk.h`. The SDK's functions mostly make escape
+//! strings, and so do these: each comes back as a string or a buffer that
+//! the caller owns and hands back to [`flow_free`]. The builders are
+//! opaque handles (`FlowMesh`, `FlowEffect`, `FlowScene`, `FlowCamera`,
 //! `FlowStage`, `FlowScreen`, `FlowTune`, `FlowSong`, `FlowAudio`,
-//! `FlowMixer`, and `FlowTerminal` for what the terminal said), each freed
-//! by its own `_free`.
+//! `FlowMixer`, `FlowTheme`, `FlowThemePackage`, and `FlowTerminal` for
+//! what the terminal said), each freed by its own `_free`.
 //!
 //! What every function keeps to, which the header says again for C:
 //!
@@ -37,6 +37,7 @@ pub mod screen;
 pub mod settings;
 pub mod stage;
 pub mod term;
+pub mod theme;
 
 use std::alloc::{alloc, dealloc, Layout};
 use std::ffi::{c_char, c_int, c_void, CStr};
@@ -98,6 +99,22 @@ pub(crate) fn hand_over(bytes: &[u8]) -> *mut u8 {
 /// A string handed out as a C string.
 pub(crate) fn owned(text: String) -> *mut c_char {
     hand_over(text.as_bytes()).cast()
+}
+
+/// Clears `*error`, if `error` points anywhere, so the caller always has
+/// NULL or a reason to free.
+pub(crate) unsafe fn untold(error: *mut *mut c_char) {
+    if let Some(error) = error.as_mut() {
+        *error = std::ptr::null_mut();
+    }
+}
+
+/// Puts `why` in `*error`, if `error` points anywhere, for the caller to
+/// free.
+pub(crate) unsafe fn tell(error: *mut *mut c_char, why: &str) {
+    if let Some(error) = error.as_mut() {
+        *error = owned(why.to_string());
+    }
 }
 
 /// A string made under [`guard`], or NULL if it couldn't be made or

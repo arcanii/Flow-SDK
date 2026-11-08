@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 # flow-sdk's, and `<[T]>::as_chunks` here too.
 rust-version = "1.88"
-description = "Flow's SDK for C, and for the languages that call C (Python's ctypes): pictures, 3D models, meshes, scenes, screens of cells, the liquid's effects and sound, and audio of the program's own"
+description = "Flow's SDK for C, and for the languages that call C (Python's ctypes): pictures, 3D models, meshes, scenes, screens of cells, the liquid's effects and sound, theme packages for Flow, and audio of the program's own"
 # The SDK's, whose last section is on C and Python; the header,
 # include/flow_sdk.h, documents each function.
 readme = "../README.md"
@@ -31,7 +31,8 @@ audio = ["flow-sdk/audio"]
 
 [dependencies]
 # The version is what a published flow-sdk-c would take from crates.io.
-flow-sdk = { path = "..", version = "0.1.0" }
+# Its theme packages are always in: they're a few functions, and serde.
+flow-sdk = { path = "..", version = "0.1.3", features = ["theme"] }
 
 # docs.rs builds it with audio, as cargo builds it by default.
 [package.metadata.docs.rs]

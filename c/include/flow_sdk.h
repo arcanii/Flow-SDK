@@ -6,8 +6,9 @@
  * frame (with the vector maths to work them out) and fitted to the cells,
  * screens of cells sent as their difference from the last, with pictures
  * among the letters, the liquid's effects and Flow's sounds (OSC 7731),
- * DECPS notes, Flow's settings seen and changed (OSC 7732), and audio of
- * the program's own (songs for a small band, played on the machine).
+ * DECPS notes, Flow's settings seen and changed (OSC 7732), theme
+ * packages for Flow written and packed, and audio of the program's own
+ * (songs for a small band, played on the machine).
  * README.md explains each escape.
  *
  * Build the library with `cargo build --release -p flow-sdk-c`, which
@@ -27,8 +28,8 @@
  *     a `size_t *`. NULL comes back for arguments refused (a NULL handle, a
  *     format there's none of, pixels that don't fit their size).
  *   - Handles (FlowTerminal, FlowMesh, FlowEffect, FlowBudget, FlowScene,
- *     FlowCamera, FlowStage, FlowScreen, FlowTune, FlowSong, FlowAudio,
- *     FlowMixer) come
+ *     FlowCamera, FlowStage, FlowScreen, FlowTheme, FlowThemePackage,
+ *     FlowTune, FlowSong, FlowAudio, FlowMixer) come
  *     from their `_new` (or flow_detect, flow_camera_orbit,
  *     flow_stage_effect) and go back to their own `_free`, never
  *     flow_free(). Each `_free` takes NULL and does nothing.
@@ -783,6 +784,147 @@ char *flow_settings_answer(const void *bytes, size_t len);
  * clock, so Flow's own wait, three seconds or so, bounds it, and a Flow
  * that couldn't answer in time, or one from before 0.1.30, gives NULL. */
 char *flow_settings_ask(const char *request, uint32_t wait_ms);
+
+/* ------------------------------------------------------------------------
+ * Theme packages for Flow
+ *
+ * A package is a folder holding themes.json and the font files and logo
+ * pictures it names, packed as a .tar.gz that `flowapp install
+ * mine.tar.gz` installs in a Flow tab (from 0.1.34): its themes then join
+ * Settings' Theme row and the new-tab picker, and one with a built-in
+ * machine's id ("green") takes that one's place. Nothing here needs a
+ * terminal.
+ *
+ * Build each theme on a FlowTheme, a setting at a time, add it to a
+ * FlowThemePackage (which copies it), and write or pack that. Flow refuses
+ * a whole package for one theme that's wrong, so everything written is
+ * checked first as Flow checks it, and nothing is written that fails:
+ * - The setters return 0, or -1 for NULL, text that isn't UTF-8, or a
+ *   name Flow hasn't: a cursor shape ("block", "underline", "bar"), a CRT
+ *   preset ("subtle", "classic", "arcade", "phosphor", "television",
+ *   "monitor") or sounds ("quiet", "tube", "teletype", "disk", "fan",
+ *   "printer", "terminal", "chime", "tones", "floppy"). Colors are
+ *   0xRRGGBB.
+ * - What only the whole can tell (an id: lowercase letters, digits and
+ *   dashes, never "flow" or "own"; a screen from 10 x 4 to 500 x 300; a
+ *   start screen of at most 200 lines of 400 bytes; a font file that isn't
+ *   there or isn't a TrueType or OpenType font, a logo that isn't a PNG;
+ *   two files going to one place; a package's name, lowercase letters,
+ *   digits and dashes, and its version) is said by the functions with an
+ *   `error`: they return -1 (or NULL) and, if `error` isn't NULL, put the
+ *   reason in `*error`, to free with flow_free; `*error` is NULL when they
+ *   didn't fail. Where a file couldn't be read or written, or tar failed,
+ *   they return FLOW_THEME_FAILED (-2) instead, saying so the same way.
+ *
+ * Packing runs the system's tar: /usr/bin/tar on macOS (without the Mac's
+ * metadata), Windows' own tar.exe, and elsewhere the tar on the PATH,
+ * every entry owned by 0 with no names.
+ * ------------------------------------------------------------------------ */
+
+#define FLOW_THEME_FAILED -2
+
+typedef struct FlowTheme FlowTheme;
+
+/* A theme with id `id`, wearing Flow's own colors, a block cursor, no
+ * tube, no start screen and no sounds until given its own. */
+FlowTheme *flow_theme_new(const char *id);
+void flow_theme_free(FlowTheme *theme);
+
+/* Its name in English, and in the language with code `code` ("ja": two or
+ * three lowercase letters) while Flow speaks that one. */
+int flow_theme_name(FlowTheme *theme, const char *name);
+int flow_theme_name_in(FlowTheme *theme, const char *code, const char *name);
+
+/* The font families to try first, by name, in place of any before. */
+int flow_theme_fonts(FlowTheme *theme, const char *const *families, size_t count);
+
+/* Brings the font file at `path`, copied into the package's fonts/ under
+ * its own name, so flow_theme_fonts can name its family. */
+int flow_theme_font_file(FlowTheme *theme, const char *path);
+
+/* Text that programs leave uncolored, the cursor, the background (the
+ * glass's tint), and a border round the text as a home computer's. */
+int flow_theme_text(FlowTheme *theme, uint32_t rgb);
+int flow_theme_cursor(FlowTheme *theme, uint32_t rgb);
+int flow_theme_background(FlowTheme *theme, uint32_t rgb);
+int flow_theme_border(FlowTheme *theme, uint32_t rgb);
+
+/* Programs' sixteen colors (black, red, green, yellow, blue, magenta,
+ * cyan, white, then the bright ones): `count` must be 16. */
+int flow_theme_ansi(FlowTheme *theme, const uint32_t *colors, size_t count);
+
+/* Everything shown in shades of `rgb`, as on a monochrome tube. */
+int flow_theme_phosphor(FlowTheme *theme, uint32_t rgb);
+
+/* The cursor's shape by name, whether it blinks, and how fast it glides
+ * to its cell (1 as Flow's, 0.5 to 4; others are refused). */
+int flow_theme_cursor_shape(FlowTheme *theme, const char *shape);
+int flow_theme_blink(FlowTheme *theme, bool blink);
+int flow_theme_cursor_speed(FlowTheme *theme, float speed);
+
+/* A tube, as the built-in CRT preset named has it. */
+int flow_theme_crt(FlowTheme *theme, const char *preset);
+
+/* The start screen, `count` lines typed into each new tab, in place of any
+ * before (a line starting with ^ is centered, and Flow's {...} fields
+ * stand for what they say: {version}, {logo}, {wait}, {tall}, {red},
+ * {clear} and the rest), at `baud` bits a second (0 at once). */
+int flow_theme_start(FlowTheme *theme, const char *const *lines, size_t count);
+int flow_theme_baud(FlowTheme *theme, uint32_t baud);
+
+/* The prompt it gives the shells: \n a new line, {cwd} the folder, {n}
+ * the command's number. */
+int flow_theme_prompt(FlowTheme *theme, const char *prompt);
+
+/* What the machine sounds like, by name. */
+int flow_theme_sounds(FlowTheme *theme, const char *sounds);
+
+/* Its screen in characters, which Fit window to offers first. */
+int flow_theme_screen(FlowTheme *theme, uint16_t cols, uint16_t rows);
+
+/* The PNG at `path` as the startup logo, copied into the package's logos/
+ * under its own name. */
+int flow_theme_logo(FlowTheme *theme, const char *path);
+
+/* More of the look's settings: `key` of `section` as `json`, a JSON value
+ * as Flow's config holds it ("fx", "style", "\"water\""). Refused at once,
+ * saying why, where it isn't JSON, isn't one a theme may bring (colors:
+ * text cursor background border ansi phosphor; cursor: shape blink speed;
+ * font: families; fx: style water_view sun electricity speed ambient rain
+ * text_ripple caustics palette opacity glow crt; crt: scanlines interlace
+ * glow decay grille vignette curvature), or isn't of its kind. */
+int flow_theme_key(FlowTheme *theme, const char *section, const char *key, const char *json, char **error);
+
+/* Whether Flow would take the theme, and the files it brings are there and
+ * are what they say. */
+int flow_theme_check(const FlowTheme *theme, char **error);
+
+typedef struct FlowThemePackage FlowThemePackage;
+
+/* A package called `name` at `version` ("1.0"), holding no themes yet. */
+FlowThemePackage *flow_theme_package_new(const char *name, const char *version);
+void flow_theme_package_free(FlowThemePackage *package);
+
+/* Adds a copy of `theme`, in place of one with its id already there; the
+ * theme stays the caller's to free. */
+int flow_theme_package_add(FlowThemePackage *package, const FlowTheme *theme);
+
+/* Whether Flow would take the package, saying why not. */
+int flow_theme_package_check(const FlowThemePackage *package, char **error);
+
+/* Its themes.json, checked, as it will be written. */
+char *flow_theme_package_json(const FlowThemePackage *package, char **error);
+
+/* "<name>-<version>.tar.gz", what a packed package is usually called. */
+char *flow_theme_package_file_name(const FlowThemePackage *package);
+
+/* Writes it, checked, into the folder `dir` (made if it isn't there):
+ * themes.json, and the files its themes bring in fonts/ and logos/. */
+int flow_theme_package_write(const FlowThemePackage *package, const char *dir, char **error);
+
+/* Packs it, checked, as the .tar.gz `tarball` (its folder made if it
+ * isn't there), ready for flowapp install. */
+int flow_theme_package_pack(const FlowThemePackage *package, const char *tarball, char **error);
 
 /* ------------------------------------------------------------------------
  * Audio of the program's own

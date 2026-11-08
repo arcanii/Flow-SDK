@@ -22,6 +22,8 @@
 //!   and the terminal's size, through crossterm (re-exported).
 //! - `audio`, behind the `audio` feature: tones, tunes and songs for a
 //!   small band of the program's own, played on the machine.
+//! - `theme`, behind the `theme` feature: theme packages for Flow, as
+//!   `flowapp install` takes them, written and packed.
 //!
 //! Like Flow's games and demos it uses none of Flow's crates, so it can be
 //! published apart.
@@ -39,6 +41,8 @@ pub mod screen;
 pub mod settings;
 pub mod stage;
 pub mod term;
+#[cfg(feature = "theme")]
+pub mod theme;
 
 #[cfg(feature = "audio")]
 pub mod audio;

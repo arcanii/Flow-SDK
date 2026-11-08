@@ -14,9 +14,10 @@ new tag reaches Flow's games and demos when Flow moves to it.
 ```bash
 cargo test --workspace                     # the SDK, the C library (its header kept in step, hello.c and scene.c built with cc, the Python package's tests through python3 -I) and the demos
 cargo test -p flow-sdk --features audio    # the SDK with its mixer
+cargo test -p flow-sdk --features theme    # the SDK with its theme packages (the C library turns it on, so --workspace has it)
 cargo test -p flow-sdk-c --no-default-features   # the C library without its audio
 cargo clippy --workspace --all-targets
-cargo run -p flow-sdk --example scene      # its examples: picture, scene, effect, tune (--features audio)
+cargo run -p flow-sdk --example scene      # its examples: picture, scene, effect, tune (--features audio), theme (--features theme)
 cargo run --release -p flow-demos -- boing # a demo (boing, cube, plasma, teletext, vector, sounds, tint, model; none lists them)
 ```
 
@@ -89,7 +90,30 @@ too late for its wait, would be taken for this one's, and reads with
 `detect::read_answers`, which stops where `poll` says a descriptor can't
 be waited on; on Windows it puts DA1
 after the request, since the pipe can't be read against a clock, so Flow's
-own three seconds bound it. `python/` is a pure-Python ctypes package
+own three seconds bound it. Theme packages for Flow (`flow_sdk::theme`,
+behind the `theme` feature, which brings serde and serde_json, so programs
+that only draw don't build them) write what Flow's `looks/packaged.rs`
+reads, a `.tar.gz` of `themes.json` and its fonts and logos that `flowapp
+install` takes: `ThemeFile` and `ThemeEntry` are Flow's own types field
+for field (their order, defaults and `skip_serializing_if`s too), checked
+by `check` as Flow's `ThemeEntry::look` and `read` check them, and a little
+stricter where Flow would take a value and do nothing with it (sounds or a
+language it hasn't, a cursor speed it clamps, `keys` outside `KEYS`, Flow's
+`THEME_KEYS`, or of the wrong `Kind`, which leaves them all off, a font
+that isn't one, a logo that isn't a PNG; a package named `bin` or `first`,
+folders of `flowapp`'s own); `Theme` and `Package` build them, `write`
+copies the files in (`fonts/`, `logos/`) and `pack` writes into a `Stage`
+under the temporary folder and runs the system's tar as Flow's
+`examples/theme_package.rs` does, owned by 0 with no names (bsdtar's flags
+on macOS and Windows, GNU tar's elsewhere unless `tar --version` says
+bsdtar). `tests/fixtures/flow-core-themes.json` is Flow's own package,
+written by `cargo run --example theme_package -- --version 0.1.0 --out
+<dir>` in Flow, which the tests read back byte for byte: write it again
+when Flow's format or its machines change, and the checks with it. The C
+library always has it (`c/src/theme.rs`: `FlowTheme` set a field at a
+time, names as strings, `FlowThemePackage`, reasons in `char **error`, and
+`FLOW_THEME_FAILED`, -2, for an `Error::Io` where a refusal is -1), and
+Python's `flow_sdk.theme` raises `Refused` or `OSError` by it. `python/` is a pure-Python ctypes package
 over it, finding the library by `FLOW_SDK_LIB`, `CARGO_TARGET_DIR`, its
 own folder (where a platform's wheel carries it: `setup.py`) or Cargo's
 `target/` above it; an SDK change that C and Python should see goes in

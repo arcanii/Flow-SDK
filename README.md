@@ -18,6 +18,8 @@ send what they sent before it, byte for byte.
 flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.0" }
 # with sound of the program's own:
 flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.0", features = ["audio"] }
+# with theme packages for Flow (from v0.1.3):
+flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.3", features = ["theme"] }
 ```
 
 | Module | What it does |
@@ -32,6 +34,7 @@ flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.0", featur
 | `fx` | The liquid's effects (OSC 7731), a queue of them waiting for their moment and a budget that keeps under Flow's allowance, Flow's named sounds, DECPS notes, the glass's tint |
 | `pipe` | Flow's pipe for images on Windows |
 | `audio` | With the `audio` feature: tones, tunes and songs of the program's own, played on the machine |
+| `theme` | With the `theme` feature: theme packages for Flow, checked as Flow checks them and packed for `flowapp install` |
 
 From C, and from Python through ctypes, most of it is a library of its own:
 see [C and Python](#c-and-python).
@@ -517,6 +520,69 @@ wait, isn't taken for this one's. Flow decides what a program may change, and
 says each change in a toast; the module's documentation has the whole
 request. C and Python have it too (see [C and Python](#c-and-python)).
 
+## Theme packages
+
+From 0.1.34 Flow takes themes as packages: a `.tar.gz` holding
+`themes.json` and the font files and logo pictures it names, which
+`flowapp install mine.tar.gz` installs in a Flow tab. Its themes then join
+Settings' Theme row and the new-tab picker after Flow's own machines, worn
+as those are (Theme details' switches, the sounds, the tube, the screen
+for Fit window to, its own fonts and logo), and one with a built-in
+machine's id (`green`, `amber`, `teletype`, …) takes that one's place.
+`theme`, behind the `theme` feature (which brings serde and serde_json),
+writes them:
+
+```rust
+use flow_sdk::theme::{Crt, Package, Sounds, Theme};
+
+let vt52 = Theme::new("vt52")
+    .name("VT52")
+    .name_in("ja", "VT52 端末")
+    .fonts(["VT323", "Glass TTY VT220"])
+    .text(0xE8F0F0)
+    .background(0x0A0F0A)
+    .phosphor(0xE8F0F0)                 // everything in shades of it, as on a monochrome tube
+    .crt(Crt::Classic)
+    .start(["", "^{tall}VT52 DECscope", "^{tall}VT52 DECscope", "", "^READY", ""])
+    .baud(9600)                         // typed in as a terminal at 9600 baud would
+    .prompt("$ ")
+    .sounds(Sounds::Terminal)
+    .screen(80, 24)
+    .key("fx", "style", "rain");        // more of the look's settings, as Flow's config holds them
+Package::new("vt-themes", "1.0").theme(vt52).pack("vt-themes-1.0.tar.gz")?;
+```
+
+`ThemeFile` and `ThemeEntry` are `themes.json` as Flow's own types hold it,
+field for field, so a package is written as Flow writes its own
+(`flow-core-themes`, whose `themes.json` the tests read back byte for
+byte). A start screen and a prompt take Flow's `{…}` fields (`{version}`,
+`{logo}`, `{wait}`, `{tall}`, `{red}`, `{#d5524d}`, `{clear}`, `{foot}` and
+the rest, which Flow's README lists under its Theme settings), and
+`font_file` and `logo` bring files, copied into the package's `fonts/` and
+`logos/`. A theme is only data: nothing in a package runs, so `flowapp`
+installs one of your own unsigned, and refuses one holding `bin/`.
+
+Flow refuses a whole package for one theme that's wrong, so `check` makes
+Flow's checks first, and `write` (into a folder) and `pack` (a `.tar.gz`)
+write nothing that fails them, saying why (`Error::Refused`) or what
+couldn't be read or written (`Error::Io`): an id of lowercase letters,
+digits and dashes, never `flow` or `own`; colors `#RRGGBB` and sixteen for
+programs or none; a cursor shape, CRT preset and sounds Flow has; a screen
+from 10 × 4 to 500 × 300; a start screen of at most 200 lines of 400
+bytes; files inside the package, none in `bin/`; and a package's name of
+lowercase letters, digits and dashes. They're a little stricter than
+Flow where Flow would take a value and quietly do nothing with it: a
+sound or a language's code it hasn't, a font file that isn't TrueType or
+OpenType, a logo that isn't a PNG (or is over 8 MB), a cursor speed it
+would clamp, or a setting in `keys` it doesn't take from a theme, or of
+the wrong kind, which would leave all of `keys` off. `Package::read` takes
+an unpacked package back, to change it or pack it again.
+
+`pack` runs the system's `tar`, as Flow's own scripts do, every entry
+owned by 0 with no names: `/usr/bin/tar` (bsdtar) on macOS without the
+Mac's metadata, Windows' own `tar.exe`, and elsewhere the `tar` on the
+PATH, with GNU tar's flags or bsdtar's where it says it's bsdtar.
+
 ## Examples
 
 ```bash
@@ -524,9 +590,11 @@ cargo run -p flow-sdk --example picture                  # a picture below the p
 cargo run -p flow-sdk --example scene                    # a cube turning over the window; click ripples
 cargo run -p flow-sdk --example effect                   # effects and sounds round a word
 cargo run -p flow-sdk --features audio --example tune    # a tune of the program's own
+cargo run -p flow-sdk --features theme --example theme   # a package of two themes, for flowapp install
 ```
 
-Run them in a Flow tab: elsewhere they say what's missing and stop.
+Run them in a Flow tab: elsewhere they say what's missing and stop (all
+but `theme`, which needs no terminal).
 
 ## The demos
 
@@ -560,7 +628,8 @@ nothing to compile: the questions and what the terminal answered,
 pictures, models, meshes, scenes with their camera, their vector maths
 and the stage that sends them each frame, screens of cells sent as their
 difference from the last, effects, Flow's sounds, DECPS notes and the
-tint, Flow's settings seen and changed, raw keys on the alternate screen,
+tint, Flow's settings seen and changed, theme packages written and
+packed, raw keys on the alternate screen,
 the terminal's size and its next key, click or resize, and the program's
 own audio: tones, tunes and songs, a player and the mixer. The queue of
 effects waiting for their moment isn't bound: in C or Python it's a few
@@ -611,11 +680,15 @@ version, which has to be the header's `FLOW_SDK_ABI`. Who owns what:
   pixels that don't fit their size).
 - Handles (`FlowTerminal`, what the terminal said; `FlowMesh`;
   `FlowEffect` and `FlowBudget`; `FlowScene`, `FlowCamera` and `FlowStage`; `FlowScreen`;
-  `FlowTune`, `FlowSong`, `FlowAudio` and `FlowMixer`) go back to their own
-  `_free`, never to `flow_free`, and each `_free` takes NULL.
-- A function that reads notes (`flow_tune_new`, `flow_song_line`) takes a
-  `char **error` too: NULL for none wanted, or where to put the reason it
-  refused (`"A4: a note needs its length"`), to free with `flow_free`.
+  `FlowTheme` and `FlowThemePackage`; `FlowTune`, `FlowSong`, `FlowAudio`
+  and `FlowMixer`) go back to their own `_free`, never to `flow_free`, and
+  each `_free` takes NULL.
+- A function that reads notes (`flow_tune_new`, `flow_song_line`), or
+  checks or writes a theme package, takes a `char **error` too: NULL for
+  none wanted, or where to put the reason it refused (`"A4: a note needs
+  its length"`), to free with `flow_free`. A theme package's functions
+  give `FLOW_THEME_FAILED` (-2) in place of -1 where a file couldn't be
+  read or written, or tar failed.
 - Pointers passed in are read during the call only and never kept; one
   with a length may be NULL when the length is 0.
 - An `int` comes back 0 for done and -1 for refused. Nothing unwinds out of
@@ -735,6 +808,26 @@ if (flow_in_flow()) {
 }
 ```
 
+A theme package from C is built a setting at a time on a `FlowTheme`, its
+cursor shape, CRT preset and sounds by the names `themes.json` gives them
+(a name Flow hasn't gives -1 at once), copied into a `FlowThemePackage`,
+and checked, written or packed, saying why where Flow would refuse it:
+
+```c
+FlowTheme *vt52 = flow_theme_new("vt52");
+flow_theme_name(vt52, "VT52");
+flow_theme_phosphor(vt52, 0xE8F0F0);
+flow_theme_crt(vt52, "classic");
+flow_theme_sounds(vt52, "terminal");
+FlowThemePackage *package = flow_theme_package_new("vt-themes", "1.0");
+flow_theme_package_add(package, vt52);          /* a copy: the theme is still yours to free */
+char *error = NULL;
+if (flow_theme_package_pack(package, "vt-themes-1.0.tar.gz", &error) != 0) {
+    fprintf(stderr, "%s\n", error);
+    flow_free(error);
+}
+```
+
 A song is lines of notes on the instruments, played by a `FlowAudio` (the
 machine's output) or rendered by a `FlowMixer` into the program's own
 buffers:
@@ -756,7 +849,8 @@ middle of the screen and ripples the liquid round it; `scene.c` draws a
 cube turning about two axes each frame, through a camera that stays put,
 on a stage, to a dance on the lute, drone and tabor, and ripples the
 liquid where it's clicked; `settings.c` asks Flow its liquid style and
-text size, and given a style (`./settings rain`) puts it on:
+text size, and given a style (`./settings rain`) puts it on; `theme.c`
+packs a theme package, saying why one with an id Flow won't take isn't:
 
 ```bash
 cargo build -p flow-sdk-c
@@ -766,6 +860,8 @@ cc c/examples/scene.c -I c/include -L target/debug -lflow_sdk_c -Wl,-rpath,targe
 ./scene
 cc c/examples/settings.c -I c/include -L target/debug -lflow_sdk_c -Wl,-rpath,target/debug -o settings
 ./settings
+cc c/examples/theme.c -I c/include -L target/debug -lflow_sdk_c -Wl,-rpath,target/debug -o theme
+./theme vt-themes-1.0.tar.gz
 ```
 
 ### From Python
@@ -796,7 +892,7 @@ with flow.screen():                             # raw keys on the alternate scre
 scene's GLB as `bytes`), `scene` with the vector maths (`add`, `sub`,
 `mul`, `dot`, `cross`, `normalize`, `lerp`, `smooth`, `rotation`, `apply`,
 `compose`, `IDENTITY`, `mix`, `shade`), `settings` for Flow's settings,
-and `audio`; a value the library refuses raises
+`theme` for theme packages, and `audio`; a value the library refuses raises
 `ValueError`, saying why where it can (notes that don't read). The
 handles free themselves when collected, or at once with `close()` or as a
 `with` block's context. `picture.show` sends a picture and writes its
@@ -858,6 +954,22 @@ if flow.in_flow():
         print(e)                                # why, in Flow's language
 ```
 
+`flow_sdk.theme` has `Theme`, whose setters chain as the Rust ones do
+(names as strings: `CURSOR_SHAPES`, `CRT_PRESETS`, `SOUNDS`, any other
+raising `ValueError` at once), and `Package`; `check`, `json`, `write`
+and `pack` raise `theme.Refused` (a `ValueError`) with the reason where
+Flow would refuse the package, and `OSError` where a file couldn't be read
+or written:
+
+```python
+from flow_sdk import theme
+
+vt52 = (theme.Theme("vt52").name("VT52").phosphor(0xE8F0F0).crt("classic")
+        .start(["", "^READY", ""]).baud(9600).sounds("terminal").screen(80, 24)
+        .key("fx", "style", "rain"))
+theme.Package("vt-themes", "1.0", [vt52]).pack()   # vt-themes-1.0.tar.gz, for flowapp install
+```
+
 From a library built without audio, `audio.available()` is False and
 making a `Song`, `Tune`, `Mixer` or `Audio` (or playing a `Tone`) raises
 `audio.Unavailable` (an `OSError`), which says how to build it with audio,
@@ -882,6 +994,7 @@ It loads the library on first use, not on import, and refuses one whose
 ```bash
 python3 -I python/examples/hello.py                      # the gem, as hello.c shows it
 python3 -I python/examples/scene.py                      # the cube turning to its dance, as scene.c has them
+python3 -I python/examples/theme.py out.tar.gz           # a package of two themes, as examples/theme.rs packs them
 python3 -I -B -m unittest discover -s python/tests       # its tests, which cargo test -p flow-sdk-c runs too
 ```
 
@@ -930,3 +1043,5 @@ repository, as above.
 - Kitty's animation and pictures under text, which Flow doesn't show yet.
 - The C library and the Python package tried on Windows, and the C
   library's audio heard through WASAPI there.
+- Theme packages packed on Windows (its own `tar.exe`) and on Linux (GNU
+  tar's flags): so far only on macOS, with bsdtar.

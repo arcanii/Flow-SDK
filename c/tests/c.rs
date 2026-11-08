@@ -1,6 +1,7 @@
 //! The library from C itself: the header's structs laid out as the crate's,
 //! the settings' functions called from C, and the examples
-//! (`examples/hello.c`, `examples/scene.c`, `examples/settings.c`) compiled
+//! (`examples/hello.c`, `examples/scene.c`, `examples/settings.c`,
+//! `examples/theme.c`) compiled
 //! with `cc` against the shared library cargo built and run with no
 //! terminal, where they have to fall back quietly and exit 0. Where there's
 //! no `cc` (or on Windows, whose compilers take other flags) they say so and
@@ -201,6 +202,31 @@ fn the_scene_example_builds_and_without_a_terminal_says_what_goes_unseen_and_unh
     let heard = if cfg!(feature = "audio") { "its dance (3.2 s) unheard" } else { "no audio in this build" };
     assert!(said.contains(heard), "{said}");
     assert!(!said.contains('\x1b'), "nothing asked or sent outside a terminal: {said:?}");
+}
+
+#[test]
+fn the_theme_example_packs_a_package_flow_reads_and_says_why_one_isnt() {
+    if let Err(why) = can_build() {
+        eprintln!("skipped: {why}");
+        return;
+    }
+    let program = compile(&common::root().join("examples/theme.c"), "flow_sdk_theme", true);
+    let tarball = Path::new(env!("CARGO_TARGET_TMPDIR")).join("theme-c").join("vt-themes-1.0.tar.gz");
+    let _ = std::fs::remove_file(&tarball);
+    let ran = run(&program).arg(&tarball).output().expect("it runs");
+    let said = String::from_utf8_lossy(&ran.stdout);
+    assert!(ran.status.success(), "it exited with {}:\n{said}{}", ran.status, String::from_utf8_lossy(&ran.stderr));
+    assert!(said.contains("Not packed: “VT100” isn't an id a theme may have"), "{said}");
+    assert!(said.contains("flowapp install"), "{said}");
+    // Unpacked, its themes.json is the SDK's for the same theme.
+    let unpacked = tarball.with_extension("unpacked");
+    let _ = std::fs::remove_dir_all(&unpacked);
+    std::fs::create_dir_all(&unpacked).expect("the scratch folder");
+    assert!(Command::new("tar").arg("-xzf").arg(&tarball).arg("-C").arg(&unpacked).status().expect("tar runs").success());
+    let package = flow_sdk::theme::Package::read(&unpacked).expect("a package Flow would read");
+    assert_eq!((package.name(), package.themes().len()), ("vt-themes", 1));
+    let vt52 = package.themes()[0].entry();
+    assert_eq!((vt52.id.as_str(), vt52.names["ja"].as_str(), vt52.phosphor.as_str(), vt52.screen), ("vt52", "VT52 端末", "#E8F0F0", Some((80, 24))));
 }
 
 #[test]

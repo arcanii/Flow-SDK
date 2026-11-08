@@ -1,0 +1,591 @@
+{
+  "format": 1,
+  "package": "flow-core-themes",
+  "version": "0.1.0",
+  "themes": [
+    {
+      "id": "home",
+      "name": "Home computer",
+      "names": {
+        "ja": "ホームコンピュータ"
+      },
+      "fonts": [
+        "C64 Pro Mono",
+        "Pet Me 64",
+        "PetMe64",
+        "Commodore 64 Pixelized",
+        "unscii-8"
+      ],
+      "text": "#A49BF5",
+      "cursor": "#A49BF5",
+      "background": "#40318D",
+      "border": "#8C7FE2",
+      "ansi": [
+        "#000000",
+        "#9A6759",
+        "#9AD284",
+        "#B8C76F",
+        "#A49BF5",
+        "#B07FC8",
+        "#70A4B2",
+        "#D0D0D0",
+        "#6C6C6C",
+        "#C08B7E",
+        "#B8E6A4",
+        "#D8E28F",
+        "#C4BDFF",
+        "#C9A0DC",
+        "#98C8D4",
+        "#FFFFFF"
+      ],
+      "phosphor": "",
+      "cursor_shape": "block",
+      "blink": true,
+      "cursor_speed": 1.5,
+      "crt": "television",
+      "start": [
+        "",
+        "^**** FLOW HOME COMPUTER ****",
+        "",
+        "^{memory} RAM SYSTEM  {bytes} BASIC BYTES FREE",
+        ""
+      ],
+      "baud": 0,
+      "prompt": "READY.\n",
+      "sounds": "disk",
+      "screen": [
+        40,
+        25
+      ]
+    },
+    {
+      "id": "workstation",
+      "name": "Flow notaSun Workstation",
+      "names": {
+        "ja": "Flow notaSun ワークステーション"
+      },
+      "fonts": [
+        "Gallant Raster Term"
+      ],
+      "text": "#000000",
+      "cursor": "#000000",
+      "background": "#FFFFFF",
+      "border": "",
+      "ansi": [
+        "#000000",
+        "#B00000",
+        "#007A00",
+        "#8A6A00",
+        "#0000C0",
+        "#A000A0",
+        "#007F80",
+        "#707070",
+        "#505050",
+        "#E00000",
+        "#00A000",
+        "#B08800",
+        "#3050FF",
+        "#D000D0",
+        "#00A0A0",
+        "#303030"
+      ],
+      "phosphor": "",
+      "cursor_shape": "block",
+      "blink": false,
+      "cursor_speed": 2.0,
+      "crt": "",
+      "start": [
+        "{banks}",
+        "{probes}",
+        "",
+        "{logo}{beside}Flow notaSun Workstation, Keyboard Present",
+        "{beside}ROM Rev. {version}, {mb} MB memory installed, Serial #{serial}.",
+        "{beside}Ethernet address {ether}, Host ID: {hostid}.",
+        "{beside}{chip}",
+        "",
+        "Type  flow-help  for more information",
+        "ok boot",
+        "Boot device: disk  File and args: {shell}",
+        ""
+      ],
+      "baud": 9600,
+      "prompt": "% ",
+      "sounds": "printer",
+      "screen": [
+        80,
+        34
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics workstation",
+      "names": {
+        "ja": "グラフィックスワークステーション"
+      },
+      "fonts": [
+        "SGI Screen"
+      ],
+      "text": "#1A1A1A",
+      "cursor": "#3B5BA9",
+      "background": "#D6D2C4",
+      "border": "",
+      "ansi": [
+        "#000000",
+        "#A01818",
+        "#1E6E1E",
+        "#7A5A00",
+        "#1F3FA0",
+        "#7A2A7A",
+        "#106A6A",
+        "#5A5A5A",
+        "#404040",
+        "#C82020",
+        "#2A8C2A",
+        "#9C7400",
+        "#2F5FD0",
+        "#A040A0",
+        "#188A8A",
+        "#2A2A2A"
+      ],
+      "phosphor": "",
+      "cursor_shape": "block",
+      "blink": true,
+      "cursor_speed": 2.0,
+      "crt": "",
+      "start": [
+        "Running power-on diagnostics...",
+        "",
+        "{logo}{beside}Starting up the system...",
+        "{beside}",
+        "{beside}To perform system maintenance instead, press <Esc>",
+        "{beside}",
+        "",
+        "Flow Release {version} IP35 Version {serial} System V",
+        "{chip}, Main memory size: {mb} Mbytes",
+        "Ethernet (ec0) address {sgi_ether}",
+        "",
+        "The system is coming up.",
+        ""
+      ],
+      "baud": 19200,
+      "prompt": "{n}% ",
+      "sounds": "chime",
+      "screen": [
+        80,
+        40
+      ]
+    },
+    {
+      "id": "green",
+      "name": "Green screen",
+      "names": {
+        "ja": "グリーンディスプレイ"
+      },
+      "fonts": [
+        "VT323",
+        "Glass TTY VT220",
+        "IBM 3270",
+        "3270 Nerd Font Mono"
+      ],
+      "text": "#41FF6E",
+      "cursor": "#41FF6E",
+      "background": "#020B04",
+      "border": "",
+      "ansi": [
+        "#0A2A12",
+        "#2FAF4F",
+        "#41FF6E",
+        "#7CFF9A",
+        "#2A8C44",
+        "#36C95A",
+        "#5CFF86",
+        "#9CFFB4",
+        "#1E5A2C",
+        "#4FD873",
+        "#6BFF8F",
+        "#ACFFC2",
+        "#3AA35A",
+        "#5FE07F",
+        "#86FFA6",
+        "#D0FFDC"
+      ],
+      "phosphor": "#41FF6E",
+      "cursor_shape": "block",
+      "blink": true,
+      "cursor_speed": 1.5,
+      "crt": "phosphor",
+      "start": [
+        "FLOW-11 MINICOMPUTER",
+        "{memory} OF CORE",
+        "",
+        "BOOTING TIME-SHARING SYSTEM ...",
+        ""
+      ],
+      "baud": 1200,
+      "prompt": "$ ",
+      "sounds": "terminal",
+      "screen": [
+        80,
+        24
+      ]
+    },
+    {
+      "id": "amber",
+      "name": "Amber screen",
+      "names": {
+        "ja": "アンバーディスプレイ"
+      },
+      "fonts": [
+        "VT323",
+        "Glass TTY VT220",
+        "IBM 3270",
+        "3270 Nerd Font Mono"
+      ],
+      "text": "#FFB000",
+      "cursor": "#FFB000",
+      "background": "#120900",
+      "border": "",
+      "ansi": [
+        "#2A1A00",
+        "#B87A00",
+        "#FFB000",
+        "#FFC640",
+        "#A06A00",
+        "#D89400",
+        "#FFBE30",
+        "#FFD27A",
+        "#5A3C00",
+        "#E09A00",
+        "#FFC020",
+        "#FFD860",
+        "#8A5C00",
+        "#F0A800",
+        "#FFCC50",
+        "#FFE6A8"
+      ],
+      "phosphor": "#FFB000",
+      "cursor_shape": "block",
+      "blink": true,
+      "cursor_speed": 1.5,
+      "crt": "classic",
+      "start": [
+        "FLOW VIDEO TERMINAL   SET-UP: 9600 BAUD, NO PARITY",
+        "",
+        "CONNECTED TO FLOW-11 ({os})",
+        ""
+      ],
+      "baud": 2400,
+      "prompt": "$ ",
+      "sounds": "terminal",
+      "screen": [
+        80,
+        24
+      ]
+    },
+    {
+      "id": "teletype",
+      "name": "Teletype",
+      "names": {
+        "ja": "テレタイプ"
+      },
+      "fonts": [
+        "Flow Teletype",
+        "Special Elite"
+      ],
+      "text": "#262422",
+      "cursor": "#262422",
+      "background": "#EFE8D8",
+      "border": "",
+      "ansi": [
+        "#262422",
+        "#8B2A1E",
+        "#262422",
+        "#262422",
+        "#262422",
+        "#262422",
+        "#262422",
+        "#5A554C",
+        "#6A645A",
+        "#A83A2A",
+        "#111111",
+        "#111111",
+        "#111111",
+        "#111111",
+        "#111111",
+        "#111111"
+      ],
+      "phosphor": "",
+      "cursor_shape": "underline",
+      "blink": false,
+      "cursor_speed": 0.5,
+      "crt": "",
+      "start": [
+        "FLOW TIME-SHARING SERVICE",
+        "LINE 1 ON LINE AT 300 BAUD",
+        ""
+      ],
+      "baud": 300,
+      "prompt": "% ",
+      "sounds": "teletype",
+      "screen": [
+        72,
+        24
+      ]
+    },
+    {
+      "id": "school",
+      "name": "School computer",
+      "names": {
+        "ja": "学校のコンピュータ"
+      },
+      "fonts": [
+        "Bedstead",
+        "ModeSeven",
+        "Mode Seven"
+      ],
+      "text": "#FFFFFF",
+      "cursor": "#FFFFFF",
+      "background": "#000000",
+      "border": "",
+      "ansi": [
+        "#000000",
+        "#FF0000",
+        "#00FF00",
+        "#FFFF00",
+        "#0000FF",
+        "#FF00FF",
+        "#00FFFF",
+        "#FFFFFF",
+        "#000000",
+        "#FF0000",
+        "#00FF00",
+        "#FFFF00",
+        "#0000FF",
+        "#FF00FF",
+        "#00FFFF",
+        "#FFFFFF"
+      ],
+      "phosphor": "",
+      "cursor_shape": "underline",
+      "blink": true,
+      "cursor_speed": 1.0,
+      "crt": "classic",
+      "start": [
+        "",
+        "^{tall}{on-blue}{yellow} Flow School Computer 32K ",
+        "",
+        "^            {white}🬵█🬹🬏     🬏🬏        {yellow}🬹██🬹     ",
+        "^          {white}🬞🬻████🬺🬱   🬁  🬢🬃     {yellow}🬎██🬎     ",
+        "^        {red}🬁🬎███████🬝🬆                     ",
+        "^{cyan}🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱🬵🬻█🬺🬱",
+        "^{blue}𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏𜺏",
+        "",
+        "Flow DFS",
+        "",
+        "BASIC",
+        ""
+      ],
+      "baud": 0,
+      "prompt": ">",
+      "sounds": "tube",
+      "screen": [
+        40,
+        25
+      ]
+    },
+    {
+      "id": "pc",
+      "name": "Personal computer",
+      "names": {
+        "ja": "パーソナルコンピュータ"
+      },
+      "fonts": [
+        "Px437 IBM VGA8",
+        "PxPlus IBM VGA8",
+        "Perfect DOS VGA 437",
+        "Web437 IBM VGA8",
+        "unscii-16"
+      ],
+      "text": "#AAAAAA",
+      "cursor": "#AAAAAA",
+      "background": "#000000",
+      "border": "",
+      "ansi": [
+        "#000000",
+        "#AA0000",
+        "#00AA00",
+        "#AA5500",
+        "#0000AA",
+        "#AA00AA",
+        "#00AAAA",
+        "#AAAAAA",
+        "#555555",
+        "#FF5555",
+        "#55FF55",
+        "#FFFF55",
+        "#5555FF",
+        "#FF55FF",
+        "#55FFFF",
+        "#FFFFFF"
+      ],
+      "phosphor": "",
+      "cursor_shape": "underline",
+      "blink": true,
+      "cursor_speed": 2.5,
+      "crt": "classic",
+      "start": [
+        "Flow Personal Computer BIOS Version {version}",
+        "Memory Test: {kb}K OK",
+        "",
+        "Starting Flow-DOS...",
+        ""
+      ],
+      "baud": 4800,
+      "prompt": "C:\\>",
+      "sounds": "fan",
+      "screen": [
+        80,
+        25
+      ]
+    },
+    {
+      "id": "instruments",
+      "name": "Flow Instruments Home Computer",
+      "names": {
+        "ja": "Flow Instruments ホームコンピュータ"
+      },
+      "fonts": [
+        "Flow Instruments",
+        "unscii-8"
+      ],
+      "text": "#000000",
+      "cursor": "#000000",
+      "background": "#42ECF6",
+      "border": "#42ECF6",
+      "ansi": [
+        "#000000",
+        "#A03D3A",
+        "#146C24",
+        "#665D28",
+        "#4A4BD1",
+        "#8D4083",
+        "#1C656A",
+        "#5C5C5C",
+        "#797979",
+        "#D54747",
+        "#178B2E",
+        "#86784B",
+        "#6F69E1",
+        "#B652A8",
+        "#25848A",
+        "#2A2A2A"
+      ],
+      "phosphor": "",
+      "cursor_shape": "block",
+      "blink": true,
+      "cursor_speed": 1.5,
+      "crt": "television",
+      "start": [
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "",
+        "^{logo}",
+        "",
+        "",
+        "",
+        "",
+        "^FLOW INSTRUMENTS",
+        "",
+        "^HOME COMPUTER",
+        "",
+        "",
+        "",
+        "",
+        "^READY-PRESS ANY KEY TO BEGIN",
+        "",
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "^{on-#d5524d}  {on-#5edd78}  {on-#000000}  {on-#e7cf81}  {on-#21b13b}  {on-#ca5bbb}  {on-#ffffff}  {on-#5455ee}  {on-#21c942}  {on-#ca5bbb}  {on-#fd5554}  {on-#cdcdcd}  {on-#7d76fd}  {on-#ff7978}  {on-#d5c254}  {on-#d5524d}  ",
+        "",
+        "^©1981  FLOW INSTRUMENTS",
+        "{wait}",
+        "{clear}{foot}",
+        " FLOW BASIC READY",
+        ""
+      ],
+      "baud": 0,
+      "prompt": ">",
+      "sounds": "tones",
+      "screen": [
+        32,
+        24
+      ]
+    },
+    {
+      "id": "amiga",
+      "name": "Flow notanAmiga CLI",
+      "names": {
+        "ja": "Flow notanAmiga CLI"
+      },
+      "fonts": [
+        "Flow notaTopaz",
+        "unscii-16"
+      ],
+      "text": "#FFFFFF",
+      "cursor": "#FF8800",
+      "background": "#0055AA",
+      "border": "",
+      "ansi": [
+        "#000022",
+        "#FF8877",
+        "#44CC44",
+        "#FF8800",
+        "#88AAFF",
+        "#FF77FF",
+        "#44CCCC",
+        "#CCCCCC",
+        "#99AACC",
+        "#FFBBBB",
+        "#66EE66",
+        "#FFCC66",
+        "#BBCCFF",
+        "#FFBBFF",
+        "#66EEEE",
+        "#FFFFFF"
+      ],
+      "phosphor": "",
+      "cursor_shape": "block",
+      "blink": false,
+      "cursor_speed": 1.5,
+      "crt": "monitor",
+      "start": [
+        "{paper-white}{clear}",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "{disk}",
+        "",
+        "^{black}Flow notanAmiga Kickstart {version}",
+        "^{black}Press any key to insert the Workbench disk",
+        "{wait}",
+        "{paper-plain}{clear}{logo}{beside}Copyright © 1985, 1986, 1987, 1988 Flow notanAmiga.",
+        "{beside}All rights reserved.",
+        "{beside}Release {version}",
+        "{beside}",
+        ""
+      ],
+      "baud": 9600,
+      "prompt": "1.{cwd}> ",
+      "sounds": "floppy",
+      "screen": [
+        80,
+        32
+      ]
+    }
+  ]
+}

@@ -733,20 +733,38 @@ float flow_budget_left(const FlowBudget *budget, float now);
  *   "reset"           puts one back to its default, or with "key": "all"
  *                     every one a program may change
  *   "reset-terminal"  starts the asking tab afresh
- *   "restart"         restarts Flow as Settings' Restart does: at once
- *                     while every other tab waits at its prompt, else
- *                     asking the user first
+ *   "restart"         restarts Flow as Settings' Restart does, but only
+ *                     while every other pane (its own tab's others too)
+ *                     waits at its prompt; otherwise it's refused, ok
+ *                     false, and Flow says so in a toast: a program
+ *                     asking is never the user's yes, and restarting then
+ *                     is the user's to do
  *
  * What fails is answered {"ok": false, "error": "..."}, the reason in
  * Flow's language. Flow decides what a program may see and change: never
  * the assistant's settings, nor the user's own theme. The JSON is the
  * program's to write and to read: these pass it on as UTF-8 text. Flow
  * answers from 0.1.30 on.
+ *
+ * From 0.1.46 Flow answers only a request that carries the asking pane's
+ * own secret as its "pass": the FLOW_TAB_KEY variable Flow gives each
+ * pane's shell, since anything printed in a tab could ask otherwise and
+ * the answers are typed into the shell's input. flow_settings_ask puts it
+ * in where the request has none and the variable is set and not empty; a
+ * request with a "pass" of its own goes as it is. Without it, or with
+ * another pane's, Flow answers nothing at all, not even to refuse. So
+ * check getenv("FLOW_TAB_KEY") first, as flow-settings does, and where
+ * there's none (run through sudo or env -i, which leave it out, or over
+ * ssh, which doesn't carry it) say so rather than wait for an answer that
+ * won't come. A Flow from 0.1.30 to 0.1.45 answers without a pass, though
+ * one from before 0.1.43 gives its tabs no key.
  * ------------------------------------------------------------------------ */
 
-/* The bytes that ask Flow `request`: OSC 7732 with the request in base64.
- * flow_settings_ask writes them and reads the answer; this is for a program
- * that reads its own input. NULL for text that isn't UTF-8. */
+/* The bytes that ask Flow `request`: OSC 7732 with the request in base64,
+ * exactly as it's given, so a request for Flow 0.1.46 or later carries its
+ * "pass" itself (FLOW_TAB_KEY's value). flow_settings_ask writes them and
+ * reads the answer; this is for a program that reads its own input. NULL
+ * for text that isn't UTF-8. */
 char *flow_settings_request(const char *request);
 
 /* The first whole answer in the `len` bytes at `bytes` (what came in after
@@ -754,12 +772,16 @@ char *flow_settings_request(const char *request);
  * Flow wrote. */
 char *flow_settings_answer(const void *bytes, size_t len);
 
-/* Asks Flow `request` and waits `wait_ms` at most (0 for three seconds, as
- * flow-settings waits) for its answer, as JSON text, which may be one that
- * isn't ok; NULL when nothing answered: a terminal that isn't Flow, a Flow
- * from before 0.1.30, or no terminal at all. A terminal that isn't Flow
- * says nothing, so the whole wait passes: ask where flow_in_flow() or
- * FlowCaps.flow says it's Flow.
+/* Asks Flow `request`, with FLOW_TAB_KEY as its "pass" where it has none,
+ * and waits `wait_ms` at most (0 for three seconds, as flow-settings
+ * waits) for its answer, as JSON text, which may be one that isn't ok.
+ * NULL when nothing answered: a terminal that isn't Flow (or a terminal
+ * started from a Flow tab), a Flow from before 0.1.30, or no terminal at
+ * all; no key, or another pane's (or one an ssh session or a script
+ * brought along); or tmux or screen in the way, which don't pass the
+ * escape on. Nothing says why, so the whole wait passes: ask where
+ * flow_in_flow() or FlowCaps.flow says it's Flow and FLOW_TAB_KEY is set,
+ * and where NULL comes, name these to the user, as flow-settings does.
  *
  * On macOS and Linux it asks the program's terminal itself, opened by
  * name, so it reaches Flow however standard input and output are piped or
@@ -791,8 +813,11 @@ char *flow_settings_ask(const char *request, uint32_t wait_ms);
  * A package is a folder holding themes.json and the font files and logo
  * pictures it names, packed as a .tar.gz that `flowapp install
  * mine.tar.gz` installs in a Flow tab (from 0.1.34): its themes then join
- * Settings' Theme row and the new-tab picker, and one with a built-in
- * machine's id ("green") takes that one's place. Nothing here needs a
+ * Settings' Theme row and the new-tab picker. A theme can't take the id of
+ * one of Flow's own looks ("green", "amber", ...): from 0.1.46 flowapp
+ * refuses a package of one's own that brings one, which would take that
+ * look's place under its name, and one bringing an id another installed
+ * package brings, which only flowapp can tell. Nothing here needs a
  * terminal.
  *
  * Build each theme on a FlowTheme, a setting at a time, add it to a
@@ -806,15 +831,22 @@ char *flow_settings_ask(const char *request, uint32_t wait_ms);
  *   "printer", "terminal", "chime", "tones", "floppy"). Colors are
  *   0xRRGGBB.
  * - What only the whole can tell (an id: lowercase letters, digits and
- *   dashes, never "flow" or "own"; a screen from 10 x 4 to 500 x 300; a
- *   start screen of at most 200 lines of 400 bytes; a font file that isn't
- *   there or isn't a TrueType or OpenType font, a logo that isn't a PNG;
- *   two files going to one place; a package's name, lowercase letters,
- *   digits and dashes, and its version) is said by the functions with an
- *   `error`: they return -1 (or NULL) and, if `error` isn't NULL, put the
- *   reason in `*error`, to free with flow_free; `*error` is NULL when they
- *   didn't fail. Where a file couldn't be read or written, or tar failed,
- *   they return FLOW_THEME_FAILED (-2) instead, saying so the same way.
+ *   dashes, at most 40, and none of Flow's own looks': "flow", "home",
+ *   "workstation", "graphics", "green", "amber", "teletype", "school",
+ *   "pc", "instruments", "amiga" or "own"; a screen from 10 x 4 to 500 x
+ *   300; a start screen of at most 200 lines of 400 bytes; a font file
+ *   that isn't there or isn't a TrueType or OpenType font, a logo that
+ *   isn't a PNG; two files going to one place; a package's name, at most
+ *   64 lowercase letters, digits and dashes, and none of flowapp's own,
+ *   "bin", "first", "previews" or "flowapp", nor a name Windows keeps for
+ *   a device, "con", "nul", "com1" and the like; and its version, at most
+ *   64 letters, digits and . - + _, neither starting nor ending with a
+ *   dot, nor a device's name before its first dot) is said by the
+ *   functions with an `error`: they return -1 (or NULL) and, if `error`
+ *   isn't NULL, put the reason in `*error`, to free with flow_free;
+ *   `*error` is NULL when they didn't fail. Where a file couldn't be
+ *   read or written, or tar failed, they return FLOW_THEME_FAILED (-2)
+ *   instead, saying so the same way.
  *
  * Packing runs the system's tar: /usr/bin/tar on macOS (without the Mac's
  * metadata), Windows' own tar.exe, and elsewhere the tar on the PATH,
@@ -825,8 +857,9 @@ char *flow_settings_ask(const char *request, uint32_t wait_ms);
 
 typedef struct FlowTheme FlowTheme;
 
-/* A theme with id `id`, wearing Flow's own colors, a block cursor, no
- * tube, no start screen and no sounds until given its own. */
+/* A theme with id `id` (lowercase letters, digits and dashes, and none of
+ * Flow's own looks'), wearing Flow's own colors, a block cursor, no tube,
+ * no start screen and no sounds until given its own. */
 FlowTheme *flow_theme_new(const char *id);
 void flow_theme_free(FlowTheme *theme);
 

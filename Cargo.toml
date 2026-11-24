@@ -6,7 +6,7 @@ members = [".", "c", "demos"]
 
 [package]
 name = "flow-sdk"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 # `<[T]>::as_chunks` (picture.rs), which came in 1.88.
 rust-version = "1.88"
@@ -47,6 +47,11 @@ serde_json = { version = "1", optional = true }
 # Asking the terminal what it can do, before crossterm reads the keys.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Who owns Flow's pipe for images, asked before anything is written to it
+# (pipe.rs): the version crossterm's and mio's already are.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 
 # The program's own sound, out through CoreAudio or WASAPI. Linux loads
 # ALSA's library as the program runs instead (alsa.rs, with libc), since

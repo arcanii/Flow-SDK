@@ -1,8 +1,10 @@
 """Theme packages for Flow (from 0.1.34): a folder holding ``themes.json``
 and the font files and logo pictures it names, packed as a ``.tar.gz``
 that ``flowapp install mine.tar.gz`` installs in a Flow tab. Its themes
-then join Settings' Theme row and the new-tab picker, and one with a
-built-in machine's id (``green``) takes that one's place::
+then join Settings' Theme row and the new-tab picker. A theme can't take
+the id of one of Flow's own looks (``green``, ``amber``, ...): from 0.1.46
+flowapp refuses a package of one's own that brings one, which would take
+that look's place under its name::
 
     from flow_sdk import theme
 
@@ -19,9 +21,9 @@ Flow refuses a whole package for one theme that's wrong, so everything is
 checked first as Flow checks it, and nothing is written that fails: a name
 Flow hasn't (a cursor shape, a CRT preset, sounds) raises ``ValueError`` at
 once, and what only the whole can tell (an id, a screen's size, a font
-file that isn't a font, two files for one place) raises :class:`Refused`
-with Flow's reason from :meth:`Theme.check`, :meth:`Package.check` and what
-writes. A file that can't be read or written raises ``OSError``. Nothing
+file that isn't a font, two files for one place, a package's name or
+version flowapp wouldn't install) raises :class:`Refused` with Flow's
+reason from :meth:`Theme.check`, :meth:`Package.check` and what writes. A file that can't be read or written raises ``OSError``. Nothing
 here needs a terminal. Packing runs the system's ``tar``.
 """
 
@@ -77,8 +79,8 @@ def _path(path: Path_) -> bytes:
 
 
 class Theme(Handle):
-    """A theme with id ``id`` (lowercase letters, digits and dashes; never
-    ``flow`` or ``own``), wearing Flow's own colors, a block cursor, no
+    """A theme with id ``id`` (lowercase letters, digits and dashes; none of
+    Flow's own looks', as ``flow``, ``green`` or ``own``), wearing Flow's own colors, a block cursor, no
     tube, no start screen and no sounds until given its own. Each setter
     returns the theme, so they chain. Colors are 0xRRGGBB."""
 
@@ -209,7 +211,10 @@ class Theme(Handle):
 
 class Package(Handle):
     """A package of themes called ``name`` (lowercase letters, digits and
-    dashes) at ``version`` ("1.0"), holding ``themes``."""
+    dashes, none of flowapp's own, ``bin``, ``first``, ``previews`` or
+    ``flowapp``, nor a device's, as ``con``) at ``version`` ("1.0": letters,
+    digits and . - + _, neither starting nor ending with a dot), holding
+    ``themes``."""
 
     FREE = "flow_theme_package_free"
     WHAT = "package"

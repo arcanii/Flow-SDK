@@ -53,7 +53,10 @@ licensed MIT OR Apache-2.0. Still to do:
   through ALSA, but none of it has been tried in a live Flow window.
   Theme packages are packed with Windows' own `tar.exe` and GNU tar's
   flags there, both untried: so far only macOS's bsdtar has packed one
-  (and `flowapp install` taken it).
+  (and `flowapp install` taken it). `Pipe::open`'s identification level
+  and owner check (0.1.4) haven't been built on Windows yet, only their
+  windows-sys calls type-checked on the Mac and the decision tested
+  there.
 - **Published**, once its interfaces settle (`publish = false` now): this
   repository holds it; still to come are the owners on crates.io
   (`flow-sdk`, `flow-sdk-c`) and PyPI (`flow-terminal-sdk`), taking out

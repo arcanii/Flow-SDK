@@ -278,9 +278,13 @@ fn the_settings_example_asks_only_in_flow_and_says_when_nothing_answered() {
     let elsewhere = run(&program).env_remove("TERM_PROGRAM").env_remove(flow_sdk::pipe::VAR).output().expect("it runs");
     let said = String::from_utf8_lossy(&elsewhere.stdout);
     assert!(elsewhere.status.success() && said.contains("isn't a Flow tab"), "{said}");
-    // Named as Flow but with no terminal to ask: nothing asked, at once.
+    // Named as Flow but without the pane's key: nothing asked, saying why.
+    let keyless = run(&program).env("TERM_PROGRAM", "flow-terminal").env_remove(flow_sdk::settings::TAB_KEY).env_remove(flow_sdk::pipe::VAR).output().expect("it runs");
+    let said = String::from_utf8_lossy(&keyless.stdout);
+    assert!(keyless.status.success() && said.contains("no tab key (FLOW_TAB_KEY)"), "{said}");
+    // With a key but no terminal to ask: nothing asked, at once.
     let started = Instant::now();
-    let named = run(&program).env("TERM_PROGRAM", "flow-terminal").env_remove(flow_sdk::pipe::VAR).output().expect("it runs");
+    let named = run(&program).env("TERM_PROGRAM", "flow-terminal").env(flow_sdk::settings::TAB_KEY, "0123456789abcdef").env_remove(flow_sdk::pipe::VAR).output().expect("it runs");
     let said = String::from_utf8_lossy(&named.stdout);
     assert!(named.status.success() && said.contains("Nothing answered"), "{said}{}", String::from_utf8_lossy(&named.stderr));
     assert!(started.elapsed() < Duration::from_secs(3), "it took {:?}", started.elapsed());

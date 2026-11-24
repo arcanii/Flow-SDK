@@ -79,7 +79,16 @@ has `FlowMaterial` with the `_in` functions, the `_packed` ones and
 dicts in Python's `flow_sdk.settings` (`ask`, `request`, `answer`, and
 `get`, `set`, `reset`, `list`, `reset_terminal` and `restart`, which raise
 `Refused` with Flow's reason or `NoAnswer`, also for an answer naming
-another request, `_answers`). On Unix `settings::ask` asks the program's
+another request, `_answers`, and `NoKey`, a `NoAnswer`, at once where
+there's no `FLOW_TAB_KEY`, `_tab_key`). From Flow 0.1.46 every request
+needs the pane's secret as its `"pass"`, else Flow answers nothing:
+`settings::ask` adds it from `FLOW_TAB_KEY` (`TAB_KEY`, `tab_key`) where
+the request has none (`with_pass`, which reads only as much JSON as finds
+the object's top-level names, `members`, since the crate has no JSON
+without the `theme` feature), so C's `flow_settings_ask` and Python's
+helpers send it too; `request` stays exactly what it's given, and the
+Python tests' PTYs check the pass reaches the terminal, each child given
+its key in its own environment (`child_env`). On Unix `settings::ask` asks the program's
 terminal itself, not its standard input and output, so piped, redirected
 or `$(…)` it still reaches Flow: `Tty` opens it by name (`ttyname_r` of
 the first of stdin, stderr and stdout that's a terminal, none of them one
@@ -90,7 +99,12 @@ too late for its wait, would be taken for this one's, and reads with
 `detect::read_answers`, which stops where `poll` says a descriptor can't
 be waited on; on Windows it puts DA1
 after the request, since the pipe can't be read against a clock, so Flow's
-own three seconds bound it. Theme packages for Flow (`flow_sdk::theme`,
+own three seconds bound it. `pipe::Pipe::open` opens Flow's pipe at the
+level of identification (`security_qos_flags`) and writes nothing to one
+whose owner (`GetSecurityInfo`) isn't the process token's user, as Flow's
+own `flow-mcp` checks its pipe; the decision (`owner_is_user`, over the
+SIDs' bytes) is tested anywhere, the Windows calls (`pipe::sid`) only
+build there. Theme packages for Flow (`flow_sdk::theme`,
 behind the `theme` feature, which brings serde and serde_json, so programs
 that only draw don't build them) write what Flow's `looks/packaged.rs`
 reads, a `.tar.gz` of `themes.json` and its fonts and logos that `flowapp
@@ -100,8 +114,14 @@ by `check` as Flow's `ThemeEntry::look` and `read` check them, and a little
 stricter where Flow would take a value and do nothing with it (sounds or a
 language it hasn't, a cursor speed it clamps, `keys` outside `KEYS`, Flow's
 `THEME_KEYS`, or of the wrong `Kind`, which leaves them all off, a font
-that isn't one, a logo that isn't a PNG; a package named `bin` or `first`,
-folders of `flowapp`'s own); `Theme` and `Package` build them, `write`
+that isn't one, a logo that isn't a PNG); its names are `flowapp`'s from
+Flow 0.1.46 (`is_package_name`, `is_version`, `is_id`, as its `apps.rs`
+`fit_name` and `fit_version` and `own_themes_refused`: no package named as
+`flowapp`'s own folders or itself, `RESERVED`, or a Windows device,
+`DEVICES`, no version ending in a dot or naming a device before its first
+dot, and no theme with the id of one of Flow's own looks, `BUILT_IN`,
+which the fixture's ids are held to, so Flow's own package itself fails
+`check` and its tests write it with `to_json`); `Theme` and `Package` build them, `write`
 copies the files in (`fonts/`, `logos/`) and `pack` writes into a `Stage`
 under the temporary folder and runs the system's tar as Flow's
 `examples/theme_package.rs` does, owned by 0 with no names (bsdtar's flags

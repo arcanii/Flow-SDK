@@ -2,8 +2,12 @@
 //! and the font files and logo pictures it names, packed as a `.tar.gz`,
 //! which `flowapp install mine.tar.gz` installs in a Flow tab. Flow then
 //! offers its themes after its own machines in Settings' Theme row and the
-//! new-tab picker, and one with a built-in machine's id takes that one's
-//! place.
+//! new-tab picker. A theme can't take the id of one of Flow's own looks
+//! ([`BUILT_IN`]): from 0.1.46 `flowapp` refuses a package of one's own
+//! that brings one, which would take that look's place under its name and
+//! let anyone's file put its words in a look the user chose. Nor may it
+//! take the id of a theme another installed package brings, which
+//! `flowapp` checks as it installs and this can't.
 //!
 //! This is the writing side of what Flow reads (its `looks/packaged.rs`):
 //! [`ThemeFile`] and [`ThemeEntry`] are `themes.json` as Flow's own types
@@ -15,7 +19,9 @@
 //! with it: a sound or a language by a name Flow hasn't, a font file that
 //! isn't a font, a logo that isn't a PNG, a cursor speed Flow would clamp,
 //! a look's setting in `keys` that Flow doesn't take from a theme, or one
-//! of the wrong kind, which would leave all of `keys` off.
+//! of the wrong kind, which would leave all of `keys` off. The names they
+//! take are `flowapp`'s as it installs a package of one's own (from Flow
+//! 0.1.46): [`is_package_name`], [`is_version`] and [`is_id`].
 //!
 //! ```no_run
 //! use flow_sdk::theme::{Crt, Package, Sounds, Theme};
@@ -222,9 +228,9 @@ pub struct ThemeFile {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ThemeEntry {
-    /// Lowercase letters, digits and dashes, at most 40; a built-in
-    /// machine's to take its place, never Flow's own (`flow`) or the user's
-    /// own (`own`).
+    /// Lowercase letters, digits and dashes, at most 40, and none of Flow's
+    /// own looks' ([`BUILT_IN`]: Flow's, its machines' and the user's own),
+    /// which only Flow's own package may bring.
     pub id: String,
     /// Its name in English (the id shows where it has none).
     pub name: String,
@@ -361,25 +367,54 @@ fn is_color(text: &str) -> bool {
     text.len() == 7 && text.starts_with('#') && text[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Whether `id` is one a theme may have.
+/// The ids of Flow's own looks, which no theme in a package may have:
+/// Flow's own, its machines', and the user's own theme's. One of a
+/// machine's would take its place, under its name, which `flowapp` lets
+/// only Flow's own package (`flow-core-themes`, from its catalog) do.
+pub const BUILT_IN: &[&str] = &["flow", "home", "workstation", "graphics", "green", "amber", "teletype", "school", "pc", "instruments", "amiga", "own"];
+
+/// Names no package may have, as `flowapp` refuses them: its own folders
+/// beside the packages (`bin/`, `first/`, the theme gallery's
+/// `previews/`), which removing the package would empty, and its own name.
+const RESERVED: [&str; 4] = ["bin", "first", "previews", "flowapp"];
+
+/// Names Windows keeps for its devices, whatever follows them after a dot,
+/// in any case: a folder can't be called one there, so `flowapp` refuses a
+/// package's name or version that is one, on every system.
+const DEVICES: [&str; 24] = ["con", "prn", "aux", "nul", "com0", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9"];
+
+/// Whether `id`'s letters are an id's: lowercase letters, digits and
+/// dashes, at most 40.
+fn id_letters(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 40 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Whether `id` is one a theme in a package may have: lowercase letters,
+/// digits and dashes, at most 40, and none of Flow's own looks'
+/// ([`BUILT_IN`]).
 pub fn is_id(id: &str) -> bool {
-    let fine = !id.is_empty() && id.len() <= 40 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    fine && !matches!(id, "flow" | "own")
+    id_letters(id) && !BUILT_IN.contains(&id)
 }
 
 /// Whether `name` is one a package may have: lowercase letters, digits and
-/// dashes, at most 64, starting with a letter or digit, and not a folder
-/// `flowapp` keeps of its own beside the packages (`bin`, `first`).
+/// dashes, at most 64, starting with a letter or digit, and none of
+/// `flowapp`'s own (`bin`, `first`, `previews`, `flowapp`) nor a name
+/// Windows keeps for a device (`con`, `nul`, `com1`…). `flowapp` also
+/// refuses a name its catalog has, which this can't know.
 pub fn is_package_name(name: &str) -> bool {
     let fine = !name.is_empty() && name.len() <= 64 && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    fine && !name.starts_with('-') && !matches!(name, "bin" | "first")
+    fine && !name.starts_with('-') && !RESERVED.contains(&name) && !DEVICES.contains(&name)
 }
 
-/// Whether `version` is one a package may have: letters, digits and
-/// `.`, `-`, `+` and `_`, at most 64, not starting with a dot.
+/// Whether `version` is one a package may have, as the name of the folder
+/// `flowapp` unpacks it into: letters (capitals too), digits and `.`, `-`,
+/// `+` and `_`, at most 64, neither starting nor ending with a dot (Windows
+/// would drop the last), and before its first dot no name Windows keeps
+/// for a device, in any case (`con`, `CON.1`).
 pub fn is_version(version: &str) -> bool {
+    let device = version.split('.').next().is_some_and(|stem| DEVICES.contains(&stem.to_ascii_lowercase().as_str()));
     let fine = !version.is_empty() && version.len() <= 64 && version.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_'));
-    fine && !version.starts_with('.')
+    fine && !version.starts_with('.') && !version.ends_with('.') && !device
 }
 
 /// Whether `code` names a language as Flow matches a theme's names: the
@@ -465,8 +500,11 @@ impl ThemeEntry {
     /// they're there is [`Package::check`]'s.
     pub fn check(&self) -> Result<(), Error> {
         let id = self.id.as_str();
+        if !id_letters(id) {
+            return refused(format!("“{id}” isn't an id a theme may have: lowercase letters, digits and dashes, at most 40"));
+        }
         if !is_id(id) {
-            return refused(format!("“{id}” isn't an id a theme may have: lowercase letters, digits and dashes, at most 40, and not flow or own"));
+            return refused(format!("“{id}” is the id of one of Flow's own themes, so it would take that one's place, under its name, which flowapp won't let a package of your own do: give it another id, as “{id}-theme”"));
         }
         for code in self.names.keys() {
             if !is_language(code) {
@@ -541,10 +579,10 @@ impl ThemeFile {
             return refused(format!("{FILE} is format {} (Flow reads {FORMAT})", self.format));
         }
         if !is_package_name(&self.package) {
-            return refused(format!("“{}” isn't a package's name: lowercase letters, digits and dashes, at most 64", self.package));
+            return refused(format!("“{}” isn't a package's name: lowercase letters, digits and dashes, at most 64, and none of flowapp's own (bin, first, previews, flowapp) nor a name Windows keeps for a device (con, nul, com1…)", self.package));
         }
         if !is_version(&self.version) {
-            return refused(format!("{}: “{}” isn't a version: letters, digits and . - + _, at most 64", self.package, self.version));
+            return refused(format!("{}: “{}” isn't a version: letters, digits and . - + _, at most 64, neither starting nor ending with a dot, and before its first dot no name Windows keeps for a device (con, nul…)", self.package, self.version));
         }
         if self.themes.is_empty() {
             return refused(format!("{} holds no themes", self.package));
@@ -589,9 +627,9 @@ pub struct Theme {
 }
 
 impl Theme {
-    /// A theme with id `id` (lowercase letters, digits and dashes; a
-    /// built-in machine's, as `green`, to take its place), wearing Flow's
-    /// own colors until it's given its own.
+    /// A theme with id `id` (lowercase letters, digits and dashes, and
+    /// none of Flow's own looks', [`BUILT_IN`]), wearing Flow's own colors
+    /// until it's given its own.
     pub fn new(id: impl Into<String>) -> Self {
         Theme { entry: ThemeEntry { id: id.into(), ..ThemeEntry::default() }, fonts_from: Vec::new(), logo_from: None }
     }
@@ -844,8 +882,9 @@ pub struct Package {
 }
 
 impl Package {
-    /// A package called `name` (lowercase letters, digits and dashes), at
-    /// `version` ("1.0"), holding no themes yet.
+    /// A package called `name` (lowercase letters, digits and dashes, as
+    /// [`is_package_name`] says), at `version` ("1.0", as [`is_version`]
+    /// says), holding no themes yet.
     pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
         Package { name: name.into(), version: version.into(), themes: Vec::new() }
     }
@@ -1087,13 +1126,19 @@ mod tests {
         let file = flows_own();
         assert_eq!(file.themes.len(), 10);
         assert_eq!(file.to_json(), FLOWS_OWN);
-        file.check().unwrap();
+        // Each of its themes is one Flow reads, but for its id, a machine's,
+        // which only Flow's own package (from its catalog) may bring.
+        for theme in &file.themes {
+            let error = theme.check().unwrap_err().to_string();
+            assert!(error.contains("one of Flow's own themes"), "{error}");
+            ThemeEntry { id: format!("{}-theme", theme.id), ..theme.clone() }.check().unwrap();
+        }
         // Made again through a package, theme by theme.
         let mut package = Package::new(&file.package, &file.version);
         for entry in &file.themes {
             package.add(Theme::from_entry(entry.clone(), "."));
         }
-        assert_eq!(package.json().unwrap(), FLOWS_OWN);
+        assert_eq!(package.file().to_json(), FLOWS_OWN);
     }
 
     #[test]
@@ -1118,9 +1163,16 @@ mod tests {
             .screen(80, 24);
         let flows = file.themes.iter().find(|t| t.id == "green").unwrap();
         assert_eq!(green.entry(), flows);
-        // Written alone as Flow's own package writes it.
-        let written = Package::new("flow-core-themes", "0.1.0").theme(green).json().unwrap();
+        // Written alone as Flow's own package writes it, though not packed
+        // by a program: its id is the machine's.
+        let package = Package::new("flow-core-themes", "0.1.0").theme(green.clone());
+        assert!(matches!(package.json(), Err(Error::Refused(_))));
+        let written = package.file().to_json();
         assert!(FLOWS_OWN.contains(&written[written.find("    {\n      \"id\": \"green\"").unwrap()..written.rfind("\n  ]").unwrap()]));
+        // Under an id of its own it's written the same, and packs.
+        let mine = Theme::from_entry(ThemeEntry { id: "my-green".into(), ..green.entry().clone() }, ".");
+        let json = Package::new("my-themes", "1.0").theme(mine).json().unwrap();
+        assert!(json.contains(&written[written.find("      \"name\"").unwrap()..written.rfind("\n  ]").unwrap()]));
     }
 
     #[test]
@@ -1154,6 +1206,63 @@ mod tests {
             }
         }
         assert_eq!(kind("fx", "liquid"), None, "a tab's, not a theme's");
+        // Flow's own looks are its machines, which its package holds, with
+        // Flow's own and the user's.
+        let mut machines: Vec<String> = flows_own().themes.into_iter().map(|t| t.id).collect();
+        machines.extend(["flow".into(), "own".into()]);
+        machines.sort();
+        let mut built_in: Vec<&str> = BUILT_IN.to_vec();
+        built_in.sort();
+        assert_eq!(machines, built_in);
+    }
+
+    #[test]
+    fn a_theme_cant_take_the_id_of_one_of_flows_own_looks() {
+        for id in BUILT_IN {
+            assert!(!is_id(id), "{id}");
+            let error = Theme::new(*id).check().unwrap_err().to_string();
+            assert!(error.contains("is the id of one of Flow's own themes") && error.contains(&format!("“{id}-theme”")), "{error}");
+            assert!(Package::new("mine", "1.0").theme(Theme::new(*id)).check().is_err(), "{id}");
+        }
+        let (longest, too_long) = ("a".repeat(40), "a".repeat(41));
+        for id in ["green-screen", "my-amber", "amiga500", "pc-xt", "flow2", "owned", "vt52", "a", longest.as_str()] {
+            assert!(is_id(id), "{id}");
+        }
+        for id in ["Green", "green screen", "green_screen", "", too_long.as_str(), "grün"] {
+            assert!(!is_id(id), "{id:?}");
+            assert!(Theme::new(id).check().unwrap_err().to_string().contains("isn't an id a theme may have"), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn names_and_versions_are_held_to_what_flowapp_installs() {
+        let (longest, too_long) = ("a".repeat(64), "a".repeat(65));
+        for name in ["mine", "vt-themes", "2048", "a", "night-shift-theme", "console", "binary", "com10", longest.as_str()] {
+            assert!(is_package_name(name), "{name}");
+        }
+        let escape = "\u{1b}]0;hi\u{7}";
+        for name in ["", "Mine", "Bin", "bin", "first", "previews", "flowapp", "con", "prn", "aux", "nul", "com0", "com1", "lpt1", "lpt9", "-rf", "a.b", "a_b", "a/b", "C:", "my themes", "é", escape, too_long.as_str()] {
+            assert!(!is_package_name(name), "{name:?}");
+        }
+        // Versions as flowapp takes them, a semver's capitals among them.
+        let (longest, too_long) = ("1".repeat(64), "1".repeat(65));
+        for version in ["1.0", "0.1.45", "1.0-beta+2", "v2", "V2", "2026_11", "0.1.31.3", "1.0-rc1", "0.6.0-RC1", "-1", "+1", "1.con", "console", longest.as_str()] {
+            assert!(is_version(version), "{version}");
+        }
+        // But never one Windows takes for another, its last dot dropped,
+        // nor one that names a device there before its first dot.
+        for version in ["", ".", "..", ".1", "1.0.", "1..", "../0.1.0", "1/2", "1\\2", "C:", "1:2", "1.0 ", "1.0 beta", "con", "con.1", "CON.1", "Con", "nul.txt", "Lpt1", "COM9.2", escape, too_long.as_str()] {
+            assert!(!is_version(version), "{version:?}");
+        }
+        // Said as they're refused.
+        let fine = Theme::new("fine");
+        let error = Package::new("con", "1.0").theme(fine.clone()).check().unwrap_err().to_string();
+        assert!(error.contains("isn't a package's name") && error.contains("a name Windows keeps for a device"), "{error}");
+        let error = Package::new("mine", "1.0.").theme(fine.clone()).check().unwrap_err().to_string();
+        assert!(error.contains("isn't a version") && error.contains("neither starting nor ending with a dot"), "{error}");
+        let error = Package::new("previews", "1.0").theme(fine.clone()).pack(std::env::temp_dir().join("flow-sdk-never-packed.tar.gz")).unwrap_err().to_string();
+        assert!(error.contains("none of flowapp's own (bin, first, previews, flowapp)"), "{error}");
+        assert!(Package::new("mine", "V1.0-RC1").theme(fine).check().is_ok());
     }
 
     #[test]
@@ -1195,7 +1304,7 @@ mod tests {
         }
         let one = |name: &str, version: &str| Package::new(name, version).theme(fine());
         assert!(one("mine", "1.0").check().is_ok());
-        for (name, version, what) in [("Mine", "1.0", "a capital"), ("my.themes", "1.0", "a dot in the name"), ("bin", "1.0", "flowapp's own folder"), ("first", "1.0", "flowapp's other"), ("", "1.0", "no name"), ("mine", "", "no version"), ("mine", ".1", "a hidden folder"), ("mine", "1/0", "a folder in the version"), ("mine", "1.0 beta", "a space")] {
+        for (name, version, what) in [("Mine", "1.0", "a capital"), ("my.themes", "1.0", "a dot in the name"), ("bin", "1.0", "flowapp's own folder"), ("first", "1.0", "flowapp's other"), ("previews", "1.0", "the gallery's folder"), ("flowapp", "1.0", "flowapp itself"), ("nul", "1.0", "a device's name"), ("", "1.0", "no name"), ("mine", "", "no version"), ("mine", ".1", "a hidden folder"), ("mine", "1/0", "a folder in the version"), ("mine", "1.0 beta", "a space"), ("mine", "1.0.", "a dot Windows would drop"), ("mine", "aux.2", "a device's name before a dot")] {
             assert!(one(name, version).check().is_err(), "{what}");
         }
         assert!(Package::new("mine", "1.0").check().is_err(), "no themes at all");

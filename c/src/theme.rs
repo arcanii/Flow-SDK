@@ -378,6 +378,24 @@ mod tests {
             let bad = flow_theme_new(c"Mine".as_ptr());
             assert_eq!(flow_theme_check(bad, &mut error), -1);
             assert!(take(error).unwrap().contains("isn't an id a theme may have"));
+            // Nor may one take the id of one of Flow's own looks, nor a
+            // package a name or version flowapp wouldn't install.
+            let machine = flow_theme_new(c"amber".as_ptr());
+            assert_eq!(flow_theme_check(machine, &mut error), -1);
+            assert!(take(error).unwrap().contains("is the id of one of Flow's own themes"));
+            for (name, version, why) in [(c"previews", c"1.0", "isn't a package's name"), (c"con", c"1.0", "isn't a package's name"), (c"mine", c"1.0.", "isn't a version"), (c"mine", c"NUL.1", "isn't a version")] {
+                let refused = flow_theme_package_new(name.as_ptr(), version.as_ptr());
+                assert_eq!(flow_theme_package_add(refused, theme), 0);
+                assert_eq!(flow_theme_package_check(refused, &mut error), -1);
+                assert!(take(error).unwrap().contains(why), "{name:?} {version:?}");
+                flow_theme_package_free(refused);
+            }
+            let capitals = flow_theme_package_new(c"mine".as_ptr(), c"1.0-RC1".as_ptr());
+            assert_eq!(flow_theme_package_add(capitals, theme), 0);
+            assert_eq!(flow_theme_package_check(capitals, &mut error), 0, "a version's capitals");
+            assert!(error.is_null());
+            flow_theme_package_free(capitals);
+            flow_theme_free(machine);
             let package = flow_theme_package_new(c"mine".as_ptr(), c"1.0".as_ptr());
             assert_eq!(flow_theme_package_check(package, &mut error), -1);
             assert_eq!(take(error).as_deref(), Some("mine holds no themes"));

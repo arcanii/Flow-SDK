@@ -15,12 +15,20 @@ send what they sent before it, byte for byte.
 
 ```toml
 [dependencies]
-flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.0" }
+flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.4" }
 # with sound of the program's own:
-flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.0", features = ["audio"] }
+flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.4", features = ["audio"] }
 # with theme packages for Flow (from v0.1.3):
-flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.3", features = ["theme"] }
+flow-sdk = { git = "https://github.com/arcanii/Flow-SDK", tag = "v0.1.4", features = ["theme"] }
 ```
+
+v0.1.4 is the one for Flow 0.1.46, which treats what's printed in a tab
+as untrusted: its settings requests carry the pane's key, which Flow now
+needs of every one ([Flow's settings](#flows-settings)); on Windows it
+writes only to a pipe of Flow's that is the user's own
+([the pipe](#windows-flows-pipe-for-images)); and its theme packages keep
+to the names, versions and ids `flowapp` installs
+([Theme packages](#theme-packages)).
 
 | Module | What it does |
 | --- | --- |
@@ -107,6 +115,18 @@ the other way, through the terminal; `Terminal::send_effects` writes effects
 there without waiting. In other terminals on Windows nothing is asked and
 nothing shows. `Query::without_pipe` keeps a program that doesn't use the
 pipe from opening it.
+
+A pipe's name is anyone's to take, and once a tab closes, or its pipe
+stops being served, a program from it that's still running could open
+whatever took the name next. So from v0.1.4 `Pipe::open` opens the pipe
+at the level of identification
+(`SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`), so whatever serves it
+can learn who opened it but never act as them, and writes nothing to one
+whose owner isn't the user the program runs as, as Flow's own `flow-mcp`
+checks its pipe: such a pipe is closed again and taken for none. Every pipe Flow makes is the
+user's (from 0.1.46 Flow names the user as its owner, and so did the
+system before, but for a Flow run as administrator, whose pipes were the
+Administrators group's).
 
 ## Pictures (kitty graphics protocol)
 
@@ -518,7 +538,29 @@ should be reading the keys meanwhile; what waits in the input is thrown
 away before asking, so an earlier request's answer, come too late for its
 wait, isn't taken for this one's. Flow decides what a program may change, and
 says each change in a toast; the module's documentation has the whole
-request. C and Python have it too (see [C and Python](#c-and-python)).
+request. `restart` restarts Flow only while every other pane (its own
+tab's others too) waits at its prompt; otherwise Flow refuses it and says
+so in a toast, since a program asking is never taken for the user's yes.
+C and Python have it too (see [C and Python](#c-and-python)).
+
+From Flow 0.1.46 a request is answered only when it carries the asking
+pane's own secret as its `"pass"`: the `FLOW_TAB_KEY` variable Flow gives
+each pane's shell (`settings::TAB_KEY`, `settings::tab_key`), since
+anything printed in a tab could ask otherwise, a file being `cat`ed or a
+remote host's output among it, and the answers are typed into the shell's
+input. From v0.1.4 `ask` puts it in from the variable where the request
+has none (`settings::with_pass`), and a request with a pass of its own
+goes as it is; `request` makes the escape of exactly what it's given.
+Without the pass, or with another pane's, Flow answers nothing at all, not
+even to refuse. So when `ask` gives none, it may be that the terminal isn't
+Flow (or was started from a Flow tab), is a Flow from before 0.1.30, or
+isn't there; that there's no key, or it's another pane's (or one an ssh
+session or a script brought along); or that tmux or screen is in the way,
+which don't pass the escape on. A program should say which, as
+`flow-settings` does: where there's no key at all (run through sudo or
+`env -i`, which leave it out, or over ssh, which doesn't carry it) it asks
+nothing and says so at once. A Flow from 0.1.30 to 0.1.45 answers without
+a pass, though one from before 0.1.43 gives its tabs no key.
 
 ## Theme packages
 
@@ -527,8 +569,12 @@ From 0.1.34 Flow takes themes as packages: a `.tar.gz` holding
 `flowapp install mine.tar.gz` installs in a Flow tab. Its themes then join
 Settings' Theme row and the new-tab picker after Flow's own machines, worn
 as those are (Theme details' switches, the sounds, the tube, the screen
-for Fit window to, its own fonts and logo), and one with a built-in
-machine's id (`green`, `amber`, `teletype`, …) takes that one's place.
+for Fit window to, its own fonts and logo). A theme can't take the id of
+one of Flow's own looks (`theme::BUILT_IN`: `green`, `amber`, `teletype`,
+…): from 0.1.46 `flowapp` refuses a package of one's own that brings one,
+which would take that look's place under its name and let anyone's file
+put its words in a look the user chose; nor one bringing an id another
+installed package brings, which only `flowapp` can tell.
 `theme`, behind the `theme` feature (which brings serde and serde_json),
 writes them:
 
@@ -566,11 +612,18 @@ Flow refuses a whole package for one theme that's wrong, so `check` makes
 Flow's checks first, and `write` (into a folder) and `pack` (a `.tar.gz`)
 write nothing that fails them, saying why (`Error::Refused`) or what
 couldn't be read or written (`Error::Io`): an id of lowercase letters,
-digits and dashes, never `flow` or `own`; colors `#RRGGBB` and sixteen for
-programs or none; a cursor shape, CRT preset and sounds Flow has; a screen
-from 10 × 4 to 500 × 300; a start screen of at most 200 lines of 400
-bytes; files inside the package, none in `bin/`; and a package's name of
-lowercase letters, digits and dashes. They're a little stricter than
+digits and dashes, none of Flow's own looks'; colors `#RRGGBB` and
+sixteen for programs or none; a cursor shape, CRT preset and sounds Flow
+has; a screen from 10 × 4 to 500 × 300; a start screen of at most 200
+lines of 400 bytes; files inside the package, none in `bin/`; and, as `flowapp` takes
+them from 0.1.46, a package's name of at most 64 lowercase letters, digits
+and dashes, none of `flowapp`'s own (`bin`, `first`, `previews`,
+`flowapp`) nor a name Windows keeps for a device (`con`, `nul`, `com1`…),
+and a version of at most 64 letters, digits and `.`, `-`, `+` and `_`,
+neither starting nor ending with a dot, with no device's name before its
+first dot (`is_package_name`, `is_version`, `is_id`). `flowapp` also
+refuses a package of one's own named as one in its catalog, which this
+can't know. They're a little stricter than
 Flow where Flow would take a value and quietly do nothing with it: a
 sound or a language's code it hasn't, a font file that isn't TrueType or
 OpenType, a logo that isn't a PNG (or is over 8 MB), a cursor speed it
@@ -780,7 +833,11 @@ flow_write_free(flow_screen_show(screen, caps.bare));
 Flow's settings from C are JSON text both ways, the program's to write
 and to read: `flow_settings_ask` writes the request and waits for the
 answer (three seconds for a wait of 0, as `flow-settings` waits), and
-gives it as JSON, `{"ok": false, …}` too, or NULL when nothing answered.
+gives it as JSON, `{"ok": false, …}` too, or NULL when nothing answered:
+for Flow 0.1.46 it puts the pane's key in as the request's `"pass"` from
+`FLOW_TAB_KEY`, so check `getenv("FLOW_TAB_KEY")` first and say so where
+there's none, rather than wait for an answer that won't come (see
+[Flow's settings](#flows-settings) for why NULL may come).
 On macOS and Linux it asks the program's terminal itself, whatever
 standard input and output are, and the answer comes in as keys, so it
 turns raw mode on for the wait where it isn't on already and back off
@@ -795,11 +852,12 @@ the next answer, so check that an answer to `get`, `set` or `reset` names
 the key asked about. On Windows the question goes down Flow's pipe, which
 can't be read against a clock: Flow's own wait, three seconds or so,
 bounds it there, not the one given. For a program that reads its own
-input, `flow_settings_request` gives the escape and `flow_settings_answer`
+input, `flow_settings_request` gives the escape of exactly the request
+given, which then carries its pass itself, and `flow_settings_answer`
 reads the answer out of what came in:
 
 ```c
-if (flow_in_flow()) {
+if (flow_in_flow() && getenv("FLOW_TAB_KEY") != NULL) {
     char *answer = flow_settings_ask("{\"do\":\"get\",\"key\":\"fx.style\"}", 0);
     if (answer != NULL) {
         printf("%s\n", answer);                   /* {"ok":true,"key":"fx.style","value":"rain"} */
@@ -935,8 +993,13 @@ it is now, `list()` every setting a program may see as a dict, and
 an answer that isn't ok, and `settings.NoAnswer` when nothing answered
 within `wait` (three seconds unless given) or when what came names
 another request (an earlier one's, too late for its own wait), both a
-`settings.SettingsError`. As in C, the terminal itself is asked whatever
-standard input and output are, raw for the wait where it isn't, nothing is
+`settings.SettingsError`. Every request goes with the pane's key as its
+`"pass"`, as Flow 0.1.46 needs; where there's no `FLOW_TAB_KEY` the
+functions that make their own requests ask nothing and raise
+`settings.NoKey`, a `NoAnswer`, at once, saying why, while `ask` asks
+anyway, as a Flow from before 0.1.46 answers without it. As in C, the
+terminal itself is asked whatever standard input and output are, raw for
+the wait where it isn't, nothing is
 asked where none of the three standard streams is a terminal, another
 terminal lets the whole wait pass, and on Windows Flow's own wait bounds
 it:
@@ -948,8 +1011,8 @@ if flow.in_flow():
     try:
         settings.set("fx.style", "rain")        # what it is now; Flow says so in a toast
         size = settings.get("font.size")
-    except settings.NoAnswer:
-        pass                                    # a Flow from before 0.1.30
+    except settings.NoAnswer as e:
+        print(e)                                # no key, or nothing answered: why
     except settings.Refused as e:
         print(e)                                # why, in Flow's language
 ```

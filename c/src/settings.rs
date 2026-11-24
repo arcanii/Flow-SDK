@@ -17,6 +17,11 @@
 //! that came too late for an earlier request isn't taken for this one's.
 //! On Windows the question goes down Flow's pipe instead, which needs
 //! neither, and Flow's own wait of a few seconds bounds it, not `wait_ms`.
+//!
+//! From Flow 0.1.46 a request is answered only with the asking pane's own
+//! secret as its `"pass"`, which `flow_settings_ask` puts in from
+//! `FLOW_TAB_KEY` where the request has none, as the SDK's `ask` does;
+//! `flow_settings_request` makes the escape of exactly what it's given.
 
 use std::ffi::{c_char, c_void};
 use std::time::Duration;
@@ -29,8 +34,8 @@ use crate::{owned_or_null, slice, text};
 /// `flow-settings` does.
 pub const WAIT_MS: u32 = 3000;
 
-/// The bytes that ask Flow `request` (a JSON object, as text); NULL for
-/// NULL or text that isn't UTF-8.
+/// The bytes that ask Flow `request` (a JSON object, as text), exactly as
+/// given, its pass and all; NULL for NULL or text that isn't UTF-8.
 #[no_mangle]
 pub unsafe extern "C" fn flow_settings_request(request: *const c_char) -> *mut c_char {
     owned_or_null(|| String::from_utf8(settings::request(text(request)?)).ok())
@@ -43,10 +48,11 @@ pub unsafe extern "C" fn flow_settings_answer(bytes: *const c_void, len: usize) 
     owned_or_null(|| settings::answer(slice(bytes.cast::<u8>(), len)?))
 }
 
-/// Asks Flow `request` and waits `wait_ms` at most ([`WAIT_MS`] for 0; on
-/// Windows, Flow's own few seconds) for its answer, as JSON text; NULL when
-/// nothing answered, or where none of standard input, output and error is
-/// a terminal, where nothing is asked.
+/// Asks Flow `request`, with the pane's key as its pass where it has none,
+/// and waits `wait_ms` at most ([`WAIT_MS`] for 0; on Windows, Flow's own
+/// few seconds) for its answer, as JSON text; NULL when nothing answered,
+/// or where none of standard input, output and error is a terminal, where
+/// nothing is asked.
 #[no_mangle]
 pub unsafe extern "C" fn flow_settings_ask(request: *const c_char, wait_ms: u32) -> *mut c_char {
     owned_or_null(|| {

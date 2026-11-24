@@ -1,6 +1,6 @@
 [package]
 name = "flow-demos"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 description = "Demos of what Flow draws: 3D scenes, pictures, teletext, its sounds, the glass's wash and a model from a file, over its liquid, which they set moving"
 license = "MIT OR Apache-2.0"

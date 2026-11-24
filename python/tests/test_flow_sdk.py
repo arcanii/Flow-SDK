@@ -597,9 +597,9 @@ class Themes(unittest.TestCase):
     def tearDown(self):
         self.scratch.cleanup()
 
-    def green(self):
+    def green(self, id="green"):
         return (
-            theme.Theme("green")
+            theme.Theme(id)
             .name("Green screen")
             .name_in("ja", "グリーンディスプレイ")
             .fonts(["VT323", "Glass TTY VT220", "IBM 3270", "3270 Nerd Font Mono"])
@@ -622,13 +622,17 @@ class Themes(unittest.TestCase):
         if not FLOWS_OWN.is_file():
             self.skipTest("the Rust SDK's fixture isn't beside the package here")
         flows = next(t for t in json.loads(FLOWS_OWN.read_text("utf-8"))["themes"] if t["id"] == "green")
-        with theme.Package("flow-core-themes", "0.1.0", [self.green()]) as package:
+        # Under an id of its own, since the machine's is Flow's alone.
+        with theme.Package("my-themes", "1.0", [self.green("my-green")]) as package:
             written = package.json()
             self.assertTrue(written.endswith("\n"))
             file = json.loads(written)
-            self.assertEqual((file["format"], file["package"], file["version"]), (1, "flow-core-themes", "0.1.0"))
-            self.assertEqual(file["themes"], [flows])
-            self.assertEqual(package.file_name, "flow-core-themes-0.1.0.tar.gz")
+            self.assertEqual((file["format"], file["package"], file["version"]), (1, "my-themes", "1.0"))
+            self.assertEqual(file["themes"], [dict(flows, id="my-green")])
+            self.assertEqual(package.file_name, "my-themes-1.0.tar.gz")
+        with theme.Package("my-themes", "1.0", [self.green()]) as package:
+            with self.assertRaisesRegex(theme.Refused, "“green” is the id of one of Flow's own themes"):
+                package.json()
 
     def test_a_theme_with_only_its_id_wears_flows_own(self):
         with theme.Package("mine", "1.0", [theme.Theme("plain")]) as package:
@@ -655,12 +659,19 @@ class Themes(unittest.TestCase):
     def test_what_only_the_whole_can_tell_is_refused_saying_why(self):
         for made, why in [
             (lambda: theme.Package("mine", "1.0", [theme.Theme("Mine")]), "isn't an id a theme may have"),
-            (lambda: theme.Package("mine", "1.0", [theme.Theme("flow")]), "isn't an id a theme may have"),
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("flow")]), "is the id of one of Flow's own themes"),
+            (lambda: theme.Package("mine", "1.0", [theme.Theme("amber")]), "is the id of one of Flow's own themes"),
             (lambda: theme.Package("mine", "1.0", [theme.Theme("wide").screen(5000, 24)]), "no screen is 5000 × 24"),
             (lambda: theme.Package("mine", "1.0", [theme.Theme("ja").name_in("ja-JP", "x")]), "isn't a language's code"),
             (lambda: theme.Package("mine", "1.0"), "mine holds no themes"),
             (lambda: theme.Package("Mine", "1.0", [theme.Theme("fine")]), "isn't a package's name"),
             (lambda: theme.Package("mine", ".1", [theme.Theme("fine")]), "isn't a version"),
+            (lambda: theme.Package("previews", "1.0", [theme.Theme("fine")]), "none of flowapp's own"),
+            (lambda: theme.Package("flowapp", "1.0", [theme.Theme("fine")]), "none of flowapp's own"),
+            (lambda: theme.Package("nul", "1.0", [theme.Theme("fine")]), "a name Windows keeps for a device"),
+            (lambda: theme.Package("mine", "1.0.", [theme.Theme("fine")]), "neither starting nor ending with a dot"),
+            (lambda: theme.Package("mine", "CON.1", [theme.Theme("fine")]), "isn't a version"),
+            (lambda: theme.Package("mine", "1" * 65, [theme.Theme("fine")]), "isn't a version"),
         ]:
             with made() as package:
                 with self.assertRaisesRegex(theme.Refused, why):
@@ -668,6 +679,9 @@ class Themes(unittest.TestCase):
                 with self.assertRaisesRegex(theme.Refused, why):
                     package.write(self.dir / "nothing")
                 self.assertFalse((self.dir / "nothing").exists(), "nothing written")
+        # A version's capitals are fine, as flowapp takes them.
+        with theme.Package("mine", "1.0-RC1", [theme.Theme("fine")]) as package:
+            package.check()
         with self.assertRaises(OSError):
             theme.Theme("gone").font_file(self.dir / "gone.ttf").check()
         (self.dir / "picture.ttf").write_bytes(PNG)
@@ -703,9 +717,30 @@ class Themes(unittest.TestCase):
         self.assertEqual(file["themes"][1]["keys"], {"fx": {"style": "water", "sun": 0.8, "water_view": "below"}})
 
 
+#: A pane's secret, as Flow gives each pane's shell one in FLOW_TAB_KEY.
+KEY = "0123456789abcdef0123456789abcdef"
+
+#: The pane's key in an environment, as the functions that ask read it,
+#: kept before any test stands in for it.
+KEY_IN = settings._tab_key
+
+
+def child_env(key=KEY):
+    """A child's environment: the tests' own, with ``key`` as its pane's
+    secret, or with none for None, whatever the tests were run with."""
+    env = {k: v for k, v in os.environ.items() if k != settings.TAB_KEY}
+    if key is not None:
+        env[settings.TAB_KEY] = key
+    return env
+
+
 class Settings(unittest.TestCase):
     def setUp(self):
         library_or_skip(self)
+        # A pane's key, as Flow's tabs have one, for the functions that ask.
+        keyed = mock.patch.object(settings, "_tab_key", lambda: KEY)
+        keyed.start()
+        self.addCleanup(keyed.stop)
 
     def test_a_request_goes_as_base64_of_its_json_as_the_sdk_writes_it(self):
         self.assertEqual(settings.request({"do": "get", "key": "fx.style"}), "\x1b]7732;eyJkbyI6ImdldCIsImtleSI6ImZ4LnN0eWxlIn0=\x07")
@@ -757,6 +792,24 @@ class Settings(unittest.TestCase):
                 {"do": "restart"},
             ],
         )
+
+    def test_without_the_panes_key_the_functions_ask_nothing_and_say_why_at_once(self):
+        asked = []
+        calls = [settings.list, lambda: settings.get("fx.style"), lambda: settings.set("font.size", 16), lambda: settings.reset("all"), settings.reset_terminal, settings.restart]
+        with mock.patch.object(settings, "_tab_key", lambda: None), mock.patch.object(settings, "ask", lambda request, wait=settings.WAIT: asked.append(request)):
+            for call in calls:
+                with self.assertRaises(settings.NoKey) as caught:
+                    call()
+                self.assertIsInstance(caught.exception, settings.NoAnswer, "caught where no answer is")
+                self.assertIn("no tab key here (FLOW_TAB_KEY), so nothing was asked", str(caught.exception))
+                self.assertIn("sudo and env -i leave it out, and ssh doesn't carry it", str(caught.exception))
+        self.assertEqual(asked, [], "nothing asked")
+
+    def test_the_panes_key_is_the_variable_unless_its_empty(self):
+        self.assertEqual(settings.TAB_KEY, "FLOW_TAB_KEY")
+        self.assertEqual(KEY_IN({"FLOW_TAB_KEY": KEY, "HOME": "/x"}), KEY)
+        self.assertIsNone(KEY_IN({"FLOW_TAB_KEY": ""}), "an empty key matches no pane")
+        self.assertIsNone(KEY_IN({}))
 
     def test_a_refusal_carries_flows_reason_and_no_answer_says_so(self):
         refusal = {"ok": False, "error": "ai.model: Flow doesn't let programs change that"}
@@ -839,7 +892,7 @@ except settings.SettingsError as e:
         pid, fd = pty.fork()
         if pid == 0:
             try:
-                os.execv(sys.executable, [sys.executable, "-I", "-B", "-c", self.CHILD, str(PACKAGE_ROOT), str(late)])
+                os.execve(sys.executable, [sys.executable, "-I", "-B", "-c", self.CHILD, str(PACKAGE_ROOT), str(late)], child_env())
             finally:
                 os._exit(127)
         os.close(late)
@@ -885,6 +938,9 @@ except settings.SettingsError as e:
         self.assertIn("first: none", shown)
         self.assertIn("second: value of font.size", shown)
         self.assertEqual(status, 0, shown)
+        # Each went with the pane's key, which the library put in.
+        asks = [a for a in requests_in(seen) if "do" in a]
+        self.assertEqual([(a["key"], a.get("pass")) for a in asks], [("fx.style", KEY), ("font.size", KEY)])
 
     # Its output to a file and its input from nothing, as `> file`, a pipe
     # or the shell's $(...) leave a program, its error still the terminal.
@@ -908,7 +964,7 @@ print(settings.get("fx.style", wait=3), flush=True)
             pid, fd = pty.fork()
             if pid == 0:
                 try:
-                    os.execv(sys.executable, [sys.executable, "-I", "-B", "-c", self.REDIRECTED, str(PACKAGE_ROOT), out])
+                    os.execve(sys.executable, [sys.executable, "-I", "-B", "-c", self.REDIRECTED, str(PACKAGE_ROOT), out], child_env())
                 finally:
                     os._exit(127)
             seen, answered = b"", False
@@ -927,6 +983,7 @@ print(settings.get("fx.style", wait=3), flush=True)
                     asked = re.search(rb"\x1b\]7732;([A-Za-z0-9+/=]*)\x07", seen)
                     if asked and not answered:
                         request = json.loads(base64.b64decode(asked.group(1)))
+                        self.assertEqual(request.get("pass"), KEY, "the pane's key goes with it")
                         told = {"ok": True, "key": request["key"], "value": "rain"}
                         os.write(fd, b"\x1b]7732;" + base64.b64encode(json.dumps(told).encode()) + b"\x07")
                         answered = True
@@ -945,6 +1002,83 @@ print(settings.get("fx.style", wait=3), flush=True)
             self.assertEqual(status, 0, shown)
             with open(out) as written:
                 self.assertEqual(written.read(), "rain\n")
+
+
+    # Asks with the library's own ask, with a pass and without, then with
+    # a function that makes its own request.
+    PASSES = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from flow_sdk import settings
+print("raw:", settings.ask({"do": "list"}, wait=0.3), flush=True)
+print("own:", settings.ask({"do": "list", "pass": "mine"}, wait=0.3), flush=True)
+try:
+    settings.get("fx.style", wait=0.3)
+except settings.NoAnswer as e:
+    print("typed:", type(e).__name__, flush=True)
+"""
+
+    def run_unanswered(self, script, env):
+        """Runs ``script`` in a PTY of its own that answers nothing: what it
+        wrote there, and how it exited."""
+        import pty
+        import select
+        import signal
+
+        pid, fd = pty.fork()
+        if pid == 0:
+            try:
+                os.execve(sys.executable, [sys.executable, "-I", "-B", "-c", script, str(PACKAGE_ROOT)], env)
+            finally:
+                os._exit(127)
+        seen = b""
+        deadline = time.monotonic() + 20
+        try:
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select([fd], [], [], 0.05)
+                if ready:
+                    try:
+                        got = os.read(fd, 4096)
+                    except OSError:
+                        break  # the child has gone (EIO on Linux)
+                    if not got:
+                        break
+                    seen += got
+        finally:
+            os.close(fd)
+            for _ in range(200):
+                done, status = os.waitpid(pid, os.WNOHANG)
+                if done:
+                    break
+                time.sleep(0.01)
+            else:
+                os.kill(pid, signal.SIGKILL)
+                _, status = os.waitpid(pid, 0)
+        return seen, status
+
+    def test_the_panes_key_goes_as_each_requests_pass_and_a_pass_of_its_own_as_it_is(self):
+        seen, status = self.run_unanswered(self.PASSES, child_env())
+        shown = seen.decode("utf-8", "replace")
+        self.assertEqual(status, 0, shown)
+        self.assertIn("typed: NoAnswer", shown)
+        self.assertEqual(requests_in(seen), [{"do": "list", "pass": KEY}, {"do": "list", "pass": "mine"}, {"do": "get", "key": "fx.style", "pass": KEY}])
+
+    def test_without_the_panes_key_ask_sends_none_and_the_functions_ask_nothing(self):
+        seen, status = self.run_unanswered(self.PASSES, child_env(None))
+        shown = seen.decode("utf-8", "replace")
+        self.assertEqual(status, 0, shown)
+        self.assertIn("typed: NoKey", shown)
+        self.assertEqual(requests_in(seen), [{"do": "list"}, {"do": "list", "pass": "mine"}], "the third asked nothing")
+        # An empty key is none.
+        seen, _ = self.run_unanswered(self.PASSES, child_env(""))
+        self.assertEqual(requests_in(seen), [{"do": "list"}, {"do": "list", "pass": "mine"}])
+
+
+def requests_in(seen):
+    """The settings requests among what a program wrote to its terminal."""
+    import base64
+
+    return [json.loads(base64.b64decode(m)) for m in re.findall(rb"\x1b\]7732;([A-Za-z0-9+/=]*)\x07", seen)]
 
 
 class OutsideATerminal(unittest.TestCase):

@@ -707,7 +707,9 @@ class Themes(unittest.TestCase):
 
     def test_the_example_packs_its_themes_and_says_why_one_isnt(self):
         tarball = self.dir / "examples.tar.gz"
-        ran = subprocess.run([sys.executable, "-I", "-B", str(PACKAGE_ROOT / "examples" / "theme.py"), str(tarball)], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        # In UTF-8 mode: piped, Python on Windows writes the locale's code
+        # page, where the refusal's quotes aren't the bytes read back below.
+        ran = subprocess.run([sys.executable, "-X", "utf8", "-I", "-B", str(PACKAGE_ROOT / "examples" / "theme.py"), str(tarball)], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
         said = ran.stdout.decode("utf-8", "replace")
         self.assertEqual(ran.returncode, 0, said + ran.stderr.decode("utf-8", "replace"))
         self.assertIn("Not packed: “VT100” isn't an id a theme may have", said)
